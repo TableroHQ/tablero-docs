@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — Database Design</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html">Overview</a>
+  <a href="c4.html">C4 Architecture</a>
+  <a href="services.html">Services</a>
+  <a href="roles.html">Roles &amp; Flows</a>
+  <a href="database.html" class="active">Database</a>
+  <a href="api.html">API</a>
+  <a href="events.html">Kafka Events</a>
+</nav>
+
+<div class="site-header">
+  <span class="tag">DATA ARCHITECTURE</span>
+  <h1>Database <span>Design</span></h1>
+  <p>Isolated PostgreSQL databases — one per implemented or planned microservice. No cross-service foreign keys. Cross-service references are stored as UUID columns only. Services that publish integration events own an <code>outbox_events</code> table for guaranteed event delivery via Transactional Outbox.</p>
+</div>
+
+<div class="page-content">
+
+  <!-- Design Principles -->
+  <div class="section">
+    <div class="section-title">Design Principles</div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Decision</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Database-per-service</strong></td><td class="desc">Each service owns its PostgreSQL database exclusively. Data sharing only via events or REST — never direct cross-service DB access.</td></tr>
+        <tr><td><strong>UUID primary keys</strong></td><td class="desc">No auto-increment leaking row counts. Safe for distributed systems. Generated via gen_random_uuid().</td></tr>
+        <tr><td><strong>TIMESTAMPTZ everywhere</strong></td><td class="desc">System spans multiple cities/countries. Timezone-aware timestamps prevent silent data corruption.</td></tr>
+        <tr><td><strong>Enums as VARCHAR</strong></td><td class="desc">Readable in queries. No enum type migration headaches. CHECK constraints enforce valid values.</td></tr>
+        <tr><td><strong>Soft delete (deleted_at)</strong></td><td class="desc">Menu items, reservations, orders, users use deleted_at timestamps. EF Core global query filters exclude them automatically.</td></tr>
+        <tr><td><strong>Transactional Outbox</strong></td><td class="desc">Every service has an outbox_events table. Business data and events are written in the same EF Core transaction. outbox publishers read pending events and publish to Kafka.</td></tr>
+        <tr><td><strong>No cross-DB foreign keys</strong></td><td class="desc">Cross-service references store the UUID and rely on application-level validation via REST calls or eventual consistency via events.</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:12px; font-family:var(--mono); font-size:11px; color:var(--muted); padding:10px 0;">
+      Schema annotations: &nbsp;&nbsp;
+      <span class="pk" style="margin-right:14px">PK — primary key</span>
+      <span class="fk" style="margin-right:14px">FK — foreign key (same DB)</span>
+      <span class="xref">xref — cross-service UUID reference (no FK constraint)</span>
+    </div>
+  </div>
+
+  <!-- identity_db -->
+  <div class="section">
+    <div class="section-title">Identity Service &mdash; identity_db</div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--identity-bg); color:var(--identity-text);">users</div>
+      <table class="schema-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">id</td><td>uuid</td><td>PK, gen_random_uuid()</td></tr>
+          <tr><td>email</td><td>varchar(255)</td><td>UNIQUE NOT NULL</td></tr>
+          <tr><td>username</td><td>varchar(50)</td><td>UNIQUE NOT NULL</td></tr>
+          <tr><td>password_hash</td><td>text</td><td>NOT NULL — PBKDF2</td></tr>
+          <tr><td>first_name, last_name</td><td>varchar(100)</td><td>NOT NULL</td></tr>
+          <tr><td>phone</td><td>varchar(30)</td><td></td></tr>
+          <tr><td>avatar_url</td><td>text</td><td></td></tr>
+          <tr><td>role</td><td>varchar(30)</td><td>CHECK: GUEST|USER|WAITER|CHEF|CASHIER|COURIER|ADMIN|DIRECTOR</td></tr>
+          <tr><td class="xref">restaurant_id</td><td>uuid</td><td>xref — null for USER/GUEST</td></tr>
+          <tr><td>status</td><td>varchar(20)</td><td>CHECK: ACTIVE|SUSPENDED|PENDING</td></tr>
+          <tr><td>created_at, updated_at</td><td>timestamptz</td><td>NOT NULL default now()</td></tr>
+          <tr><td>deleted_at</td><td>timestamptz</td><td>nullable — soft delete</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--identity-bg); color:var(--identity-text);">refresh_tokens</div>
+      <table class="schema-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">id</td><td>uuid</td><td>PK</td></tr>
+          <tr><td class="fk">user_id</td><td>uuid</td><td>FK &rarr; users NOT NULL</td></tr>
+          <tr><td>token_hash</td><td>text</td><td>UNIQUE NOT NULL (SHA-256)</td></tr>
+          <tr><td>device_fingerprint</td><td>varchar(255)</td><td></td></tr>
+          <tr><td>is_revoked</td><td>boolean</td><td>default false</td></tr>
+          <tr><td>expires_at</td><td>timestamptz</td><td>NOT NULL</td></tr>
+          <tr><td>created_at</td><td>timestamptz</td><td>NOT NULL</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--identity-bg); color:var(--identity-text);">otp_codes</div>
+      <table class="schema-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">id</td><td>uuid</td><td>PK</td></tr>
+          <tr><td class="fk">user_id</td><td>uuid</td><td>FK &rarr; users</td></tr>
+          <tr><td>code_hash</td><td>text</td><td>NOT NULL (hashed 6-digit)</td></tr>
+          <tr><td>purpose</td><td>varchar(30)</td><td>CHECK: PASSWORD_RESET|EMAIL_VERIFY</td></tr>
+          <tr><td>is_used</td><td>boolean</td><td>default false</td></tr>
+          <tr><td>expires_at</td><td>timestamptz</td><td>NOT NULL (10 min)</td></tr>
+          <tr><td>created_at</td><td>timestamptz</td><td>NOT NULL</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- reservation_db -->
+  <div class="section">
+    <div class="section-title">Reservation Service &mdash; reservation_db</div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--reservation-bg); color:var(--reservation-text);">restaurant_tables</div>
+      <table class="schema-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">id</td><td>uuid</td><td>PK</td></tr>
+          <tr><td class="xref">restaurant_id</td><td>uuid</td><td>xref NOT NULL</td></tr>
+          <tr><td>table_number</td><td>varchar(20)</td><td>NOT NULL</td></tr>
+          <tr><td>capacity</td><td>integer</td><td>NOT NULL</td></tr>
+          <tr><td>location_type</td><td>varchar(30)</td><td>CHECK: INDOOR|OUTDOOR|BAR|TERRACE</td></tr>
+          <tr><td>qr_code_url</td><td>text</td><td>generated QR image URL</td></tr>
+          <tr><td>status</td><td>varchar(20)</td><td>CHECK: AVAILABLE|OCCUPIED|RESERVED|MAINTENANCE</td></tr>
+          <tr><td>created_at, updated_at</td><td>timestamptz</td><td>NOT NULL</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--reservation-bg); color:var(--reservation-text);">reservations</div>
+      <table class="schema-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">id</td><td>uuid</td><td>PK</td></tr>
+          <tr><td class="xref">customer_id</td><td>uuid</td><td>xref NOT NULL</td></tr>
+          <tr><td class="fk">table_id</td><td>uuid</td><td>FK &rarr; restaurant_tables</td></tr>
+          <tr><td>party_size</td><td>integer</td><td>NOT NULL</td></tr>
+          <tr><td>reserved_date</td><td>date</td><td>NOT NULL</td></tr>
+          <tr><td>slot_start, slot_end</td><td>time</td><td>NOT NULL</td></tr>
+          <tr><td>status</td><td>varchar(20)</td><td>CHECK: PENDING|CONFIRMED|SEATED|COMPLETED|CANCELLED|NO_SHOW</td></tr>
+          <tr><td>special_requests</td><td>text</td><td></td></tr>
+          <tr><td>reminder_sent</td><td>boolean</td><td>default false</td></tr>
+          <tr><td>created_at, updated_at</td><td>timestamptz</td><td>NOT NULL</td></tr>
+          <tr><td>deleted_at</td><td>timestamptz</td><td>nullable — soft delete</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--reservation-bg); color:var(--reservation-text);">reservation_pre_orders &bull; time_slots</div>
+      <table class="schema-table">
+        <thead><tr><th>Table</th><th>Key Columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>reservation_pre_orders</td><td class="mono">reservation_id (FK), menu_item_id (xref), menu_item_name, quantity, notes</td><td>Name snapshot at time of booking</td></tr>
+          <tr><td>time_slots</td><td class="mono">restaurant_id (xref), day_of_week, slot_start, slot_end, max_reservations</td><td>Admin-configurable availability windows</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- order_db -->
+  <div class="section">
+    <div class="section-title">Order &amp; Kitchen Service &mdash; order_db</div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--order-bg); color:var(--order-text);">menu_categories &bull; menu_items</div>
+      <table class="schema-table">
+        <thead><tr><th>Table</th><th>Key Columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>menu_categories</td><td class="mono">id (PK), restaurant_id (xref), name, sort_order, is_active</td><td>Scoped per restaurant</td></tr>
+          <tr><td>menu_items</td><td class="mono">id (PK), category_id (FK), name, description, price, image_url, prep_time_min, allergens (text[]), is_available, deleted_at</td><td>Soft-deletable. allergens as PostgreSQL array</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--order-bg); color:var(--order-text);">orders</div>
+      <table class="schema-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">id</td><td>uuid</td><td>PK</td></tr>
+          <tr><td>type</td><td>varchar(20)</td><td>CHECK: DINE_IN|DELIVERY|PRE_ORDER</td></tr>
+          <tr><td class="xref">reservation_id</td><td>uuid</td><td>xref (nullable)</td></tr>
+          <tr><td class="xref">customer_id</td><td>uuid</td><td>xref NOT NULL</td></tr>
+          <tr><td class="xref">waiter_id</td><td>uuid</td><td>xref (nullable)</td></tr>
+          <tr><td class="xref">table_id</td><td>uuid</td><td>xref (nullable)</td></tr>
+          <tr><td>status</td><td>varchar(20)</td><td>CHECK: PENDING|IN_KITCHEN|READY|SERVED|CANCELLED</td></tr>
+          <tr><td>total_amount</td><td>numeric(10,2)</td><td></td></tr>
+          <tr><td>notes</td><td>text</td><td></td></tr>
+          <tr><td>created_at</td><td>timestamptz</td><td></td></tr>
+          <tr><td>deleted_at</td><td>timestamptz</td><td>soft delete</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--order-bg); color:var(--order-text);">order_items &bull; item_modifiers &bull; kitchen_printer_configs</div>
+      <table class="schema-table">
+        <thead><tr><th>Table</th><th>Key Columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>order_items</td><td class="mono">order_id (FK), menu_item_id (FK), name_snapshot, price_snapshot, quantity, modifiers (JSONB), kitchen_status</td><td>Price immutable after placement. Status: QUEUED|PREPARING|READY</td></tr>
+          <tr><td>item_modifiers</td><td class="mono">menu_item_id (FK), name, price_adjustment, is_active</td><td>Optional add-ons/modifications per menu item</td></tr>
+          <tr><td>kitchen_printer_configs</td><td class="mono">restaurant_id (xref), webhook_url, format, is_active</td><td>Format: ZPL or ESC_POS. Optional per restaurant</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- payment_db -->
+  <div class="section">
+    <div class="section-title">Payment &amp; Loyalty Service &mdash; payment_db</div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--payment-bg); color:var(--payment-text);">invoices</div>
+      <table class="schema-table">
+        <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="pk">id</td><td>uuid</td><td>PK</td></tr>
+          <tr><td class="xref">order_id</td><td>uuid</td><td>xref NOT NULL</td></tr>
+          <tr><td class="xref">customer_id</td><td>uuid</td><td>xref NOT NULL</td></tr>
+          <tr><td>subtotal, tax_amount, tip_amount</td><td>numeric(10,2)</td><td></td></tr>
+          <tr><td>discount_amount</td><td>numeric(10,2)</td><td>bonus redemptions applied</td></tr>
+          <tr><td>total</td><td>numeric(10,2)</td><td>NOT NULL</td></tr>
+          <tr><td>currency</td><td>char(3)</td><td>ISO 4217</td></tr>
+          <tr><td>status</td><td>varchar(20)</td><td>CHECK: DRAFT|SENT|PAID|REFUNDED|CANCELLED</td></tr>
+          <tr><td>payment_method</td><td>varchar(20)</td><td>CHECK: CARD|CASH|BALANCE|SPLIT</td></tr>
+          <tr><td>stripe_checkout_id</td><td>varchar(255)</td><td></td></tr>
+          <tr><td>created_at</td><td>timestamptz</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--payment-bg); color:var(--payment-text);">user_balances &bull; bonus_catalogue &bull; delivery_balance_holds</div>
+      <table class="schema-table">
+        <thead><tr><th>Table</th><th>Key Columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>user_balances</td><td class="mono">user_id (xref UNIQUE), available_balance, held_balance, loyalty_points</td><td>One row per user. Points default 0</td></tr>
+          <tr><td>bonus_catalogue</td><td class="mono">restaurant_id (xref), item_name, points_cost, retail_value, image_url, is_active, expires_at</td><td>Director-configurable per restaurant</td></tr>
+          <tr><td>delivery_balance_holds</td><td class="mono">user_id (xref), delivery_id (xref), amount, status, auto_release_at</td><td>Status: HELD|RELEASED|REFUNDED. Auto-release +2h</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--payment-bg); color:var(--payment-text);">invoice_items &bull; payments &bull; refunds &bull; balance_transactions &bull; bonus_redemptions &bull; loyalty_config</div>
+      <table class="schema-table">
+        <thead><tr><th>Table</th><th>Key Columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>invoice_items</td><td class="mono">invoice_id (FK), description, quantity, unit_price, total</td><td>Line items including $0.00 bonus redemptions</td></tr>
+          <tr><td>payments</td><td class="mono">invoice_id (FK), stripe_payment_id (UNIQUE), amount, status</td><td>Tracks receipt URL and failure reason</td></tr>
+          <tr><td>refunds</td><td class="mono">payment_id (FK), amount, reason, stripe_refund_id</td><td>Partial or full refunds</td></tr>
+          <tr><td>balance_transactions</td><td class="mono">user_id (xref), type (TOPUP|DEBIT|HOLD|RELEASE), amount, reference_id</td><td>Audit trail for all balance changes</td></tr>
+          <tr><td>bonus_redemptions</td><td class="mono">user_id (xref), catalogue_item_id (FK), points_spent, invoice_id (FK)</td><td>Links redeemed bonus to invoice line item</td></tr>
+          <tr><td>loyalty_config</td><td class="mono">restaurant_id (xref), points_per_currency_unit, is_active</td><td>Director-configurable. e.g. 1 point per $1</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- delivery_db -->
+  <div class="section">
+    <div class="section-title">Delivery Service &mdash; delivery_db &middot; planned</div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--delivery-bg); color:var(--delivery-text);">delivery_orders &bull; delivery_items &bull; couriers &bull; delivery_checkpoints &bull; courier_ratings</div>
+      <table class="schema-table">
+        <thead><tr><th>Table</th><th>Key Columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>delivery_orders</td><td class="mono">order_id (xref), customer_id (xref), courier_id (xref nullable), delivery_address, status</td><td>Status: PENDING &rarr; ASSIGNED &rarr; PICKED_UP &rarr; IN_TRANSIT &rarr; DELIVERED &rarr; CONFIRMED</td></tr>
+          <tr><td>delivery_items</td><td class="mono">delivery_order_id (FK), menu_item_name, quantity</td><td>Snapshot of items being delivered</td></tr>
+          <tr><td>couriers</td><td class="mono">user_id (xref UNIQUE), is_online, current_lat, current_lng, avg_rating</td><td>ONLINE/OFFLINE toggle. Rating denormalized</td></tr>
+          <tr><td>delivery_checkpoints</td><td class="mono">delivery_order_id (FK), lat, lng, status_label, recorded_at</td><td>GPS trail visible to customer</td></tr>
+          <tr><td>courier_ratings</td><td class="mono">delivery_order_id (FK UNIQUE), customer_id (xref), courier_id (xref), stars (1-5), comment</td><td>One rating per delivery per customer</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- notify_db -->
+  <div class="section">
+    <div class="section-title">Notification &amp; Review Service &mdash; notify_db</div>
+
+    <div class="schema-section">
+      <div class="schema-header" style="background:var(--notify-bg); color:var(--notify-text);">notifications &bull; notification_preferences &bull; reviews &bull; review_ratings</div>
+      <table class="schema-table">
+        <thead><tr><th>Table</th><th>Key Columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>notifications</td><td class="mono">user_id (xref), type, channel (EMAIL|SMS|PUSH), title, message, is_read, delivery_status</td><td>Tracks sent/failed/bounced status</td></tr>
+          <tr><td>notification_preferences</td><td class="mono">user_id (xref), category, sms_enabled, email_enabled</td><td>Per-customer opt-out per category</td></tr>
+          <tr><td>reviews</td><td class="mono">customer_id (xref), restaurant_id (xref), reservation_id (xref nullable), delivery_id (xref nullable), comment, status</td><td>Status: PENDING|PUBLISHED|REJECTED. UNIQUE per reservation/delivery</td></tr>
+          <tr><td>review_ratings</td><td class="mono">review_id (FK), category (CHEF|WAITER|CLEANLINESS|SERVICE), stars (1-5)</td><td>Multi-dimensional ratings per review</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Table Summary -->
+  <div class="section">
+    <div class="section-title">Table Summary</div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Service</th><th>Database</th><th>Tables</th><th>Key Entities</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Identity</strong></td><td class="mono">identity_db</td><td>3 + outbox</td><td class="desc">users, refresh_tokens, otp_codes</td></tr>
+        <tr><td><strong>Restaurant</strong></td><td class="mono">restaurant_db</td><td>5 + outbox</td><td class="desc">restaurants, restaurant_photos, operating_hours, table_qr_cache, rating_snapshots</td></tr>
+        <tr><td><strong>Reservation</strong></td><td class="mono">reservation_db</td><td>4 + outbox</td><td class="desc">restaurant_tables, time_slots, reservations, reservation_pre_orders</td></tr>
+        <tr><td><strong>Order &amp; Kitchen</strong></td><td class="mono">order_db</td><td>6 + outbox</td><td class="desc">menu_categories, menu_items, item_modifiers, orders, order_items, kitchen_printer_configs</td></tr>
+        <tr><td><strong>Payment &amp; Loyalty</strong></td><td class="mono">payment_db</td><td>10 + outbox</td><td class="desc">invoices, invoice_items, payments, refunds, user_balances, balance_transactions, bonus_catalogue, bonus_redemptions, delivery_balance_holds, loyalty_config</td></tr>
+        <tr><td><strong>Delivery</strong></td><td class="mono">delivery_db</td><td>5 + outbox</td><td class="desc">delivery_orders, delivery_items, couriers, delivery_checkpoints, courier_ratings</td></tr>
+        <tr><td><strong>Notification &amp; Review</strong></td><td class="mono">notify_db</td><td>4 + outbox</td><td class="desc">notifications, notification_preferences, reviews, review_ratings</td></tr>
+        <tr class="highlight-row"><td><strong>Final planned total</strong></td><td></td><td><strong>37 + 7 = 44</strong></td><td>7 domain services &middot; 7 databases &middot; Transactional Outbox pattern</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Legend -->
+  <div class="section">
+    <div class="section-title">Legend</div>
+    <div class="info-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="info-box"><h4><span class="pk">PK</span></h4><p>Primary Key — UUID</p></div>
+      <div class="info-box"><h4><span class="fk">FK</span></h4><p>Foreign Key — same database</p></div>
+      <div class="info-box"><h4><span class="xref">xref</span></h4><p>UUID referencing another service (no FK constraint)</p></div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

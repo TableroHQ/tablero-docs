@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — Services</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html">Overview</a>
+  <a href="c4.html">C4 Architecture</a>
+  <a href="services.html" class="active">Services</a>
+  <a href="roles.html">Roles &amp; Flows</a>
+  <a href="database.html">Database</a>
+  <a href="api.html">API</a>
+  <a href="events.html">Kafka Events</a>
+</nav>
+
+<div class="site-header">
+  <span class="tag">MICROSERVICES</span>
+  <h1>Service <span>Breakdown</span></h1>
+  <p>The current repository contains IdentityService, RestaurantService, ReservationService, OrderService, PaymentService, NotificationService, ApiGateway, SharedKernel, and Contracts. The final planned architecture keeps database-per-service isolation and adds DeliveryService as a dedicated microservice. Async communication uses Apache Kafka-ready contracts and local outbox publisher workers; real-time workflows use planned SignalR hubs.</p>
+</div>
+
+<div class="page-content">
+
+  <!-- Identity -->
+  <div class="section">
+    <div class="section-title">Identity Service &mdash; :5001 &middot; identity_db</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>RESPONSIBILITIES</h4>
+        <ul>
+          <li>Register user — email + username + password (PBKDF2 via ASP.NET Core Identity)</li>
+          <li>Login by <strong>email OR username</strong> on the same endpoint — field auto-detected</li>
+          <li>Issue JWT access tokens <strong>(15 min)</strong> + refresh tokens <strong>(7 days)</strong></li>
+          <li>Refresh token rotation — old token invalidated on use, new pair issued</li>
+          <li>Update profile: name, avatar, phone, username</li>
+          <li>Password reset via email OTP — 6-digit code, 10 min expiry, single-use</li>
+          <li>Role assignment / change by Admin or Director</li>
+          <li>Account suspend / reactivate</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL NOTES</h4>
+        <ul>
+          <li>JWT claims include: <code>userId</code>, <code>email</code>, <code>username</code>, <code>role</code>, <code>restaurantId</code></li>
+          <li>Refresh tokens stored with <strong>device fingerprint</strong> (User-Agent hash)</li>
+          <li>Rate limiting on <code>/auth/login</code> via Polly + Redis counter</li>
+          <li>Avatar upload &rarr; stored as CDN URL (S3 / Azure Blob)</li>
+          <li>OTP stored in <strong>Redis</strong> — TTL 10 min, deleted on first use</li>
+          <li>Publishes <code>user.registered</code> and <code>user.password.reset.requested</code> events</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Restaurant -->
+  <div class="section">
+    <div class="section-title">Restaurant Service &mdash; :5002 &middot; restaurant_db</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>RESPONSIBILITIES</h4>
+        <ul>
+          <li>Store restaurant info: name, address, geolocation (lat/lng), operating hours</li>
+          <li>Photo gallery management — upload, set primary, CDN-served URLs</li>
+          <li>Public menu display — no auth required (YARP bypass configured)</li>
+          <li>QR code generation per table &rarr; returns PNG or SVG</li>
+          <li>Aggregate ratings: chef avg, waiter avg, cleanliness avg, overall score</li>
+          <li>Operating hours + holiday schedule management</li>
+          <li>Multi-branch support — all data scoped by <code>restaurant_id</code></li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL NOTES</h4>
+        <ul>
+          <li>Public endpoints bypass JWT — configured directly at YARP route level</li>
+          <li><strong>QRCoder</strong> NuGet generates QR PNG encoding <code>restaurantId + tableId</code></li>
+          <li>Ratings are <strong>denormalized aggregates</strong> — updated via <code>review.submitted</code> events from Notification Service</li>
+          <li>Menu displayed here is a <strong>read-only cache</strong> — canonical menu lives in Order Service, synced via <code>menu.item.updated</code> events</li>
+          <li>Photos stored as URL references; binary data served from CDN</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reservation -->
+  <div class="section">
+    <div class="section-title">Reservation Service &mdash; :5003 &middot; reservation_db</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>RESPONSIBILITIES</h4>
+        <ul>
+          <li>Table layout management — indoor / outdoor / bar / terrace zones</li>
+          <li>Time slot configuration per restaurant, managed by Admin</li>
+          <li>Availability check with <strong>Redis distributed lock</strong> preventing double-booking</li>
+          <li>Reservation creation with exact date + time slot + party size</li>
+          <li>Pre-order food items with reservation — pushed to kitchen on seating</li>
+          <li>Status lifecycle: PENDING &rarr; CONFIRMED &rarr; SEATED &rarr; COMPLETED / NO_SHOW / CANCELLED</li>
+          <li>Automated reminder 24h before via Quartz.NET scheduler</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL NOTES</h4>
+        <ul>
+          <li>Redis lock key pattern: <code>slot:{restaurantId}:{tableId}:{date}:{slotId}</code> — TTL 30 sec during booking transaction</li>
+          <li>Pre-order items stored in <code>reservation_pre_orders</code> table — forwarded to Order &amp; Kitchen Service when customer is seated via <code>reservation.seated</code> event</li>
+          <li>QR scan populates <code>X-Table-Id</code> header forwarded through YARP to this service</li>
+          <li>Publishes: <code>reservation.confirmed</code>, <code>reservation.seated</code>, <code>reservation.cancelled</code>, <code>reservation.completed</code>, <code>reservation.no_show</code>, <code>reservation.reminder</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order & Kitchen -->
+  <div class="section">
+    <div class="section-title">Order &amp; Kitchen Service &mdash; :5004 &middot; order_db</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>RESPONSIBILITIES</h4>
+        <ul>
+          <li>Canonical menu management — categories, items, modifiers, pricing, allergens</li>
+          <li>Order placement by customer from app or waiter on behalf of customer</li>
+          <li>Orders scoped to: <strong>table session</strong>, <strong>delivery</strong>, or <strong>pre-order</strong></li>
+          <li><strong>Kitchen Display System (KDS)</strong> — real-time order queue for chefs via SignalR</li>
+          <li>Audio chime + visual alert on new order (browser Audio API)</li>
+          <li>Item status: QUEUED &rarr; PREPARING &rarr; READY</li>
+          <li>Chef calls specific waiter for table pickup via <code>WaiterHub</code></li>
+          <li>Kitchen printer webhook — POST order ticket to configurable endpoint</li>
+          <li>Mark item unavailable (86'd) — reflected to public menu in real-time via event</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL NOTES</h4>
+        <ul>
+          <li><strong>KitchenHub</strong>: chefs join group <code>kitchen:{restaurantId}</code></li>
+          <li><strong>WaiterHub</strong>: waiters join group <code>waiter:{waiterId}</code></li>
+          <li><strong>TableHub</strong>: customers join group <code>table:{tableId}</code> for order status</li>
+          <li>Kitchen printer: configurable webhook URL per restaurant; payload ZPL or ESC/POS JSON</li>
+          <li>Order items store <code>price_snapshot</code> — price at time of order, immutable after placement</li>
+          <li>Publishes: <code>order.placed</code>, <code>order.item.ready</code>, <code>order.ready</code>, <code>order.served</code>, <code>order.cancelled</code>, <code>menu.item.unavailable</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment -->
+  <div class="section">
+    <div class="section-title">Payment &amp; Loyalty Service &mdash; :5005 &middot; payment_db</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>RESPONSIBILITIES</h4>
+        <ul>
+          <li>Invoice generation from completed orders — triggered by <code>order.ready</code> event</li>
+          <li>Stripe Checkout for card payments</li>
+          <li>Cash payment recorded by cashier via dedicated POS app</li>
+          <li>Split bill across multiple customers at same table</li>
+          <li>Account balance management — top-up + deductions</li>
+          <li><strong>Loyalty:</strong> earn X points per currency unit spent</li>
+          <li><strong>Loyalty:</strong> bonus catalogue — food items redeemable for points</li>
+          <li>Bonus redemption &rarr; zero-price line item on invoice</li>
+          <li>Delivery pre-payment — balance held, released on delivery confirmation</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL NOTES</h4>
+        <ul>
+          <li>Stripe webhooks handled: <code>payment_intent.succeeded</code>, <code>payment_intent.payment_failed</code>, <code>charge.refunded</code></li>
+          <li>Delivery balance: <strong>hold</strong> (not deduction) &rarr; confirmed on delivery receipt &rarr; or auto-refund after 2h if unconfirmed</li>
+          <li>Bonus points: calculated after <code>payment.succeeded</code> event — points_earned = floor(total &times; rate)</li>
+          <li>Cashier POS: dedicated minimal app uses <code>/cashier/*</code> endpoints only</li>
+          <li>Publishes: <code>payment.succeeded</code>, <code>payment.failed</code>, <code>payment.cash.recorded</code>, <code>invoice.generated</code>, <code>bonus.earned</code>, <code>bonus.redeemed</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delivery -->
+  <div class="section">
+    <div class="section-title">Delivery Service &mdash; :5006 &middot; delivery_db &middot; planned</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>RESPONSIBILITIES</h4>
+        <ul>
+          <li>Delivery order creation — triggers full pre-payment via Payment Service</li>
+          <li>Broadcast to all available online couriers: SignalR push + Twilio SMS</li>
+          <li>First-accept assignment — race condition handled via Redis lock</li>
+          <li>Courier GPS checkpoint recording — lat/lng + timestamp per checkpoint</li>
+          <li>Customer confirms receipt in app &rarr; releases balance hold</li>
+          <li>Auto-confirm + balance release after 2 hours if no customer action</li>
+          <li>Customer rates courier (1&ndash;5 stars + comment)</li>
+          <li>Courier average rating computed and displayed on profile</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL NOTES</h4>
+        <ul>
+          <li>Courier availability set via ONLINE / OFFLINE toggle in courier app</li>
+          <li>First-accept lock key: <code>delivery:{deliveryId}:accept</code> — TTL 5 sec</li>
+          <li>GPS checkpoints: last N positions shown to customer, full history retained</li>
+          <li><strong>CourierHub</strong>: assignment broadcasts to group <code>couriers:{restaurantId}</code></li>
+          <li>Publishes: <code>delivery.broadcast</code>, <code>delivery.assigned</code>, <code>delivery.checkpoint</code>, <code>delivery.confirmed</code>, <code>delivery.rated</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification -->
+  <div class="section">
+    <div class="section-title">Notification Service &mdash; :5007 &middot; notify_db &middot; review features planned</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>RESPONSIBILITIES</h4>
+        <ul>
+          <li>Consumes ALL platform events &rarr; dispatches appropriate notifications</li>
+          <li><strong>Email</strong> via SendGrid: receipts, OTPs, reminders, promotions</li>
+          <li><strong>SMS</strong> via Twilio: reservation reminders, delivery updates</li>
+          <li><strong>In-app push</strong> via SignalR NotifyHub + FCM for mobile</li>
+          <li>Review submission: chef, waiter, cleanliness, service ratings + comment</li>
+          <li>Review moderation — Admin approve / reject before publication</li>
+          <li>Aggregate ratings &rarr; publish <code>review.submitted</code> event &rarr; Restaurant Service updates</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL NOTES</h4>
+        <ul>
+          <li>Review only allowed after <strong>COMPLETED</strong> reservation or confirmed delivery — enforced server-side</li>
+          <li>One review per reservation / delivery per customer — enforced by unique DB constraint</li>
+          <li>Promotional emails: bulk via SendGrid Marketing API, scoped per restaurant</li>
+          <li>Chef/waiter ratings stored per staff member — average computed on query (Dapper)</li>
+          <li>Notification preferences: per-customer opt-out of SMS / email per category</li>
+          <li>Audit log: all sent notifications stored with delivery status (sent / failed / bounced)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SignalR Hubs -->
+  <div class="section">
+    <div class="section-title">SignalR Real-Time Hubs</div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+      <table class="data-table">
+        <thead>
+          <tr><th>Hub</th><th>Service</th><th>Group Pattern</th><th>Subscribers</th><th>Events Pushed</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="signalr-label"><span class="ws-dot"></span> <span class="mono">KitchenHub</span></span></td>
+            <td>Order &amp; Kitchen</td>
+            <td class="mono">kitchen:{restaurantId}</td>
+            <td class="desc">Chef screens, chef phones</td>
+            <td class="desc">NewOrder, ItemStatusChanged, OrderCancelled</td>
+          </tr>
+          <tr>
+            <td><span class="signalr-label"><span class="ws-dot"></span> <span class="mono">WaiterHub</span></span></td>
+            <td>Order &amp; Kitchen</td>
+            <td class="mono">waiter:{waiterId}</td>
+            <td class="desc">Waiter phone / tablet</td>
+            <td class="desc">OrderReadyForPickup, TableCallReceived, NewTableOrder</td>
+          </tr>
+          <tr>
+            <td><span class="signalr-label"><span class="ws-dot"></span> <span class="mono">TableHub</span></span></td>
+            <td>Order &amp; Kitchen</td>
+            <td class="mono">table:{tableId}</td>
+            <td class="desc">Customer at table (in-app)</td>
+            <td class="desc">OrderStatusUpdated, ItemReady, BillReady</td>
+          </tr>
+          <tr>
+            <td><span class="signalr-label"><span class="ws-dot"></span> <span class="mono">CourierHub</span></span></td>
+            <td>Delivery</td>
+            <td class="mono">couriers:{restaurantId}</td>
+            <td class="desc">Courier phones (online only)</td>
+            <td class="desc">NewDeliveryAvailable, DeliveryAssigned</td>
+          </tr>
+          <tr>
+            <td><span class="signalr-label"><span class="ws-dot"></span> <span class="mono">NotifyHub</span></span></td>
+            <td>Notification</td>
+            <td class="mono">user:{userId}</td>
+            <td class="desc">All authenticated users</td>
+            <td class="desc">InAppNotification, BonusEarned, ReviewPrompt</td>
+          </tr>
+          <tr>
+            <td><span class="signalr-label"><span class="ws-dot"></span> <span class="mono">CashierHub</span></span></td>
+            <td>Payment &amp; Loyalty</td>
+            <td class="mono">cashier:{restaurantId}</td>
+            <td class="desc">Cashier POS terminal</td>
+            <td class="desc">BillRequested, PaymentConfirmed, TableReleased</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — Full C4 Architecture</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* C4-SPECIFIC STYLES — kept inline because they are unique to this page */
+
+  /* NAV TABS (L1/L2/L3/L4 switcher) */
+  .nav-bar {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 0 48px;
+    display: flex;
+    gap: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-tab {
+    padding: 18px 24px;
+    border: none;
+    background: transparent;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .nav-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--text);
+  }
+
+  .nav-tab:hover { color: var(--text); }
+
+  /* PAGES */
+  .page { display: none; padding: 48px; }
+  .page.active { display: block; }
+
+  /* PAGE HEADER */
+  .page-header {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 48px;
+    align-items: flex-start;
+  }
+
+  .level-badge {
+    background: var(--text);
+    color: white;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .page-header-text h2 {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+
+  .page-header-text p {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.7;
+    max-width: 700px;
+  }
+
+  /* NODE CARDS */
+  .node-card {
+    border-radius: 10px;
+    padding: 20px;
+    border: 2px solid;
+    text-align: center;
+  }
+
+  .node-card .n-icon { font-size: 28px; margin-bottom: 10px; display: block; }
+  .node-card .n-type {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .node-card .n-name {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: block;
+    line-height: 1.3;
+  }
+  .node-card .n-desc {
+    font-size: 11px;
+    line-height: 1.5;
+    opacity: 0.8;
+  }
+  .node-card .n-tech {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 9px;
+    background: rgba(255,255,255,0.6);
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .person-card { background: var(--identity-bg); border-color: var(--identity-border); }
+  .person-card .n-type, .person-card .n-name { color: var(--identity-text); }
+
+  .system-card { background: var(--restaurant-bg); border-color: var(--restaurant-border); }
+  .system-card .n-type, .system-card .n-name { color: var(--restaurant-text); }
+
+  .external-card { background: var(--notify-bg); border-color: var(--notify-border); }
+  .external-card .n-type, .external-card .n-name { color: var(--notify-text); }
+
+  .container-card { background: var(--reservation-bg); border-color: var(--reservation-border); }
+  .container-card .n-type, .container-card .n-name { color: var(--reservation-text); }
+
+  .component-card { background: var(--order-bg); border-color: var(--order-border); }
+  .component-card .n-type, .component-card .n-name { color: var(--order-text); }
+
+  .db-card { background: var(--delivery-bg); border-color: var(--delivery-border); }
+  .db-card .n-type, .db-card .n-name { color: var(--delivery-text); }
+
+  .kafka-card { background: var(--payment-bg); border-color: var(--payment-border); }
+  .kafka-card .n-type, .kafka-card .n-name { color: var(--payment-text); }
+
+  /* RELATIONSHIP TABLE */
+  .rel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .rel-table th {
+    background: var(--text);
+    color: white;
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    font-weight: 500;
+  }
+
+  .rel-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .rel-table tr:last-child td { border-bottom: none; }
+  .rel-table tr:nth-child(even) td { background: #f9fafb; }
+
+  .rel-table .from { font-weight: 600; }
+  .rel-table .arrow { color: var(--muted); text-align: center; }
+  .rel-table .to { font-weight: 600; }
+  .rel-table .desc { color: var(--muted); font-size: 12px; }
+  .rel-table .tech { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  /* DIAGRAM LAYOUTS */
+  .context-diagram {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+  }
+
+  .context-grid {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    gap: 24px;
+    align-items: center;
+    min-height: 420px;
+  }
+
+  .actors-col { display: flex; flex-direction: column; gap: 16px; }
+
+  .center-system {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .center-node {
+    border-radius: 16px;
+    padding: 32px;
+    border: 3px solid;
+    text-align: center;
+    width: 100%;
+  }
+
+  .arrow-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--bg);
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* CONTAINER DIAGRAM */
+  .container-diagram {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+  }
+
+  .container-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr 180px;
+    gap: 32px;
+    align-items: start;
+  }
+
+  .boundary-box {
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+  }
+
+  .boundary-label {
+    position: absolute;
+    top: -11px;
+    left: 16px;
+    background: var(--white);
+    padding: 0 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .boundary-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* VERTICAL ARROW */
+  .v-arrow {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 20px;
+    padding: 4px 0;
+  }
+
+  /* SERVICE GRID for L2 */
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .service-card {
+    border-radius: 10px;
+    padding: 16px;
+    border: 2px solid;
+    text-align: center;
+  }
+
+  .service-card .s-icon { font-size: 24px; margin-bottom: 8px; display: block; }
+  .service-card .s-type {
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .service-card .s-name {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .service-card .s-desc {
+    font-size: 10px;
+    line-height: 1.4;
+    opacity: 0.8;
+  }
+  .service-card .s-tech {
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 8px;
+    background: rgba(255,255,255,0.6);
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .infra-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  /* COMPONENT DIAGRAM */
+  .component-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .component-item {
+    background: var(--order-bg);
+    border: 2px solid var(--order-border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  .component-item .ci-icon { font-size: 22px; margin-bottom: 8px; display: block; }
+  .component-item .ci-type {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--order-text);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .component-item .ci-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--order-text);
+    margin-bottom: 8px;
+    display: block;
+  }
+  .component-item .ci-desc {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: 8px;
+  }
+  .component-item .ci-endpoints {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .component-item .ci-tech {
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 9px;
+    background: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    display: inline-block;
+    color: var(--muted);
+  }
+
+  /* ENTITY DIAGRAM */
+  .entity-modules {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .entity-module {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .em-header {
+    padding: 14px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .em-body { padding: 16px 18px; }
+
+  .em-entity {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .em-entity:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+
+  .em-entity-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .em-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .em-field {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    padding: 2px 0;
+  }
+
+  .em-field-name { font-family: var(--mono); color: var(--text); }
+  .em-field-type { font-family: var(--mono); color: var(--muted); }
+
+  /* LEGEND */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 24px;
+    padding: 16px;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .legend-box {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 2px solid;
+    flex-shrink: 0;
+  }
+
+  /* PACKAGE LABEL */
+  .package-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    margin-bottom: 12px;
+    display: inline-block;
+  }
+
+  /* DIAGRAM TITLE */
+  .diagram-title {
+    margin-top: 16px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    border-top: 1px solid var(--border);
+  }
+  .diagram-title .dt-sub {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--muted);
+    display: block;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html">Overview</a>
+  <a href="c4.html" class="active">C4 Architecture</a>
+  <a href="services.html">Services</a>
+  <a href="roles.html">Roles &amp; Flows</a>
+  <a href="database.html">Database</a>
+  <a href="api.html">API</a>
+  <a href="events.html">Kafka Events</a>
+</nav>
+
+<!-- SITE HEADER -->
+<div class="site-header">
+  <span class="tag">C4 MODEL &mdash; ARCHITECTURE DOCUMENTATION</span>
+  <h1>Tablero &mdash; <span>Restaurant</span> Operating System</h1>
+  <p>Complete C4 architecture documentation covering all four levels &mdash; from high-level system context down to individual entities and their relationships.</p>
+</div>
+
+<!-- NAV -->
+<div class="nav-bar">
+  <button class="nav-tab active" onclick="showPage('l1', this)">L1 &mdash; Context</button>
+  <button class="nav-tab" onclick="showPage('l2', this)">L2 &mdash; Container</button>
+  <button class="nav-tab" onclick="showPage('l3', this)">L3 &mdash; Component</button>
+  <button class="nav-tab" onclick="showPage('l4', this)">L4 &mdash; Code</button>
+</div>
+
+<!-- =========================================== LEVEL 1 =========================================== -->
+<div class="page active" id="l1">
+
+  <div class="page-header">
+    <div class="level-badge">LEVEL 1</div>
+    <div class="page-header-text">
+      <h2>System Context Diagram</h2>
+      <p>The highest level of abstraction. Shows <strong>Tablero</strong> as a black box in the center, surrounded by the people who use it and the external systems it depends on. At this level we don't care about technology &mdash; only about <em>who</em> uses the system and <em>what</em> it connects to.</p>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <h4>WHAT THIS DIAGRAM SHOWS</h4>
+      <p>The system and everything outside it. Users (people), our software system, and external systems it integrates with. No internal details.</p>
+    </div>
+    <div class="info-box">
+      <h4>WHO THIS DIAGRAM IS FOR</h4>
+      <p>Non-technical stakeholders, project managers, business owners. Anyone who needs to understand what the system does and who interacts with it &mdash; without any technical knowledge required.</p>
+    </div>
+  </div>
+
+  <!-- DIAGRAM -->
+  <div class="section">
+    <div class="section-title">Diagram</div>
+    <div class="context-diagram">
+      <div class="context-grid">
+
+        <!-- LEFT &mdash; Actors -->
+        <div class="actors-col">
+          <div class="node-card person-card">
+            <span class="n-icon">&#x1F464;</span>
+            <span class="n-type">[Person]</span>
+            <span class="n-name">Guest</span>
+            <span class="n-desc">Browses restaurant info, menus, photos, and ratings without logging in. Scans QR codes.</span>
+          </div>
+          <div class="node-card person-card">
+            <span class="n-icon">&#x1F37D;&#xFE0F;</span>
+            <span class="n-type">[Person]</span>
+            <span class="n-name">Customer</span>
+            <span class="n-desc">Reserves tables, orders food, pays via app or cash, earns loyalty bonuses, places delivery orders, writes reviews.</span>
+          </div>
+          <div class="node-card person-card">
+            <span class="n-icon">&#x1F468;&#x200D;&#x1F373;</span>
+            <span class="n-type">[Person]</span>
+            <span class="n-name">Staff</span>
+            <span class="n-desc">Waiters, chefs, and cashiers. Manage kitchen queue, serve tables, process cash payments, handle service flow.</span>
+          </div>
+          <div class="node-card person-card">
+            <span class="n-icon">&#x1F6F5;</span>
+            <span class="n-type">[Person]</span>
+            <span class="n-name">Courier</span>
+            <span class="n-desc">Accepts delivery orders, adds GPS checkpoints, confirms delivery to customer.</span>
+          </div>
+          <div class="node-card person-card">
+            <span class="n-icon">&#x1F4BC;</span>
+            <span class="n-type">[Person]</span>
+            <span class="n-name">Admin / Director</span>
+            <span class="n-desc">Manages staff, menus, tables, promotions, loyalty programmes, multi-branch operations, and analytics.</span>
+          </div>
+        </div>
+
+        <!-- CENTER -->
+        <div class="center-system">
+          <div class="arrow-label">&larr; Browses menus, books tables, orders food, pays, tracks deliveries, writes reviews using [REST/HTTPS + SignalR/WebSocket]</div>
+          <div class="center-node system-card" style="border-width:3px;">
+            <span class="n-icon" style="font-size:48px;">&#x1F354;</span>
+            <span class="n-type" style="font-size:11px; letter-spacing:2px;">[Software System]</span>
+            <span class="n-name" style="font-size:20px;">Tablero &mdash; Restaurant<br>Operating System</span>
+            <span class="n-desc" style="font-size:13px; margin-top:12px; display:block;">A full-stack platform connecting every actor in the restaurant lifecycle &mdash; QR menus, table reservations, real-time kitchen displays, delivery tracking, loyalty rewards, and cashier POS. Current services run on .NET 10 / ASP.NET Core Web API; the final planned architecture adds Delivery as a dedicated microservice.</span>
+          </div>
+          <div class="arrow-label">Processes payments [Stripe SDK/HTTPS], sends emails [SendGrid], sends SMS [Twilio] &rarr;</div>
+        </div>
+
+        <!-- RIGHT &mdash; External -->
+        <div class="actors-col">
+          <div class="node-card external-card">
+            <span class="n-icon">&#x1F4B3;</span>
+            <span class="n-type">[External System]</span>
+            <span class="n-name">Stripe</span>
+            <span class="n-desc">PCI-compliant card payment processing. Checkout sessions for app payments, webhooks for payment status callbacks.</span>
+          </div>
+          <div class="node-card external-card">
+            <span class="n-icon">&#x1F4E7;</span>
+            <span class="n-type">[External System]</span>
+            <span class="n-name">SendGrid</span>
+            <span class="n-desc">Transactional email delivery. Receipts, OTPs, reservation reminders, promotional emails.</span>
+          </div>
+          <div class="node-card external-card">
+            <span class="n-icon">&#x1F4F1;</span>
+            <span class="n-type">[External System]</span>
+            <span class="n-name">Twilio</span>
+            <span class="n-desc">SMS delivery for reservation reminders, delivery status updates, and courier broadcast notifications.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="diagram-title">System Context diagram for Tablero<span class="dt-sub">Shows the system in its environment with the people and external systems it interacts with</span></div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-box" style="background:var(--identity-bg); border-color:var(--identity-border);"></div> Person &mdash; A human user of the system</div>
+    <div class="legend-item"><div class="legend-box" style="background:var(--restaurant-bg); border-color:var(--restaurant-border);"></div> Our Software System</div>
+    <div class="legend-item"><div class="legend-box" style="background:var(--notify-bg); border-color:var(--notify-border);"></div> External System &mdash; Outside our boundary</div>
+  </div>
+
+  <!-- RELATIONSHIPS -->
+  <div class="section" style="margin-top:32px;">
+    <div class="section-title">All Relationships</div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+      <table class="rel-table">
+        <thead>
+          <tr>
+            <th>From</th>
+            <th style="text-align:center;">&rarr;</th>
+            <th>To</th>
+            <th>Description</th>
+            <th>Protocol</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="from">Guest</td><td class="arrow">&rarr;</td><td class="to">Tablero</td><td class="desc">Views restaurant info, menus, photos, ratings, and scans QR codes (no auth required)</td><td class="tech">REST / HTTPS / JSON</td></tr>
+          <tr><td class="from">Customer</td><td class="arrow">&rarr;</td><td class="to">Tablero</td><td class="desc">Reserves tables, pre-orders, orders at table, pays via app or cash, earns bonuses, places deliveries, writes reviews</td><td class="tech">REST / HTTPS / SignalR</td></tr>
+          <tr><td class="from">Waiter</td><td class="arrow">&rarr;</td><td class="to">Tablero</td><td class="desc">Submits orders on behalf of customers, manages tables, receives kitchen pickup alerts</td><td class="tech">REST / HTTPS / SignalR</td></tr>
+          <tr><td class="from">Chef</td><td class="arrow">&rarr;</td><td class="to">Tablero</td><td class="desc">Views kitchen display, updates item status (QUEUED &rarr; PREPARING &rarr; READY), calls waiter for pickup</td><td class="tech">REST / HTTPS / SignalR</td></tr>
+          <tr><td class="from">Cashier</td><td class="arrow">&rarr;</td><td class="to">Tablero</td><td class="desc">Processes cash payments via POS, releases tables, views bill queue</td><td class="tech">REST / HTTPS / SignalR</td></tr>
+          <tr><td class="from">Courier</td><td class="arrow">&rarr;</td><td class="to">Tablero</td><td class="desc">Accepts delivery broadcasts, adds GPS checkpoints, confirms delivery</td><td class="tech">REST / HTTPS / SignalR</td></tr>
+          <tr><td class="from">Admin / Director</td><td class="arrow">&rarr;</td><td class="to">Tablero</td><td class="desc">Manages staff, menus, tables, time slots, promotions, loyalty config, multi-branch operations</td><td class="tech">REST / HTTPS / JSON</td></tr>
+          <tr><td class="from">Tablero</td><td class="arrow">&rarr;</td><td class="to">Stripe</td><td class="desc">Creates Stripe Checkout sessions for card payments, receives webhook callbacks for payment success/failure</td><td class="tech">HTTPS / Stripe.net SDK</td></tr>
+          <tr><td class="from">Tablero</td><td class="arrow">&rarr;</td><td class="to">SendGrid</td><td class="desc">Sends transactional emails: receipts, OTPs, reminders, promotional blasts</td><td class="tech">SendGrid SDK / HTTPS</td></tr>
+          <tr><td class="from">Tablero</td><td class="arrow">&rarr;</td><td class="to">Twilio</td><td class="desc">Sends SMS: reservation reminders, delivery alerts, courier broadcast notifications</td><td class="tech">Twilio SDK / HTTPS</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- =========================================== LEVEL 2 =========================================== -->
+<div class="page" id="l2">
+
+  <div class="page-header">
+    <div class="level-badge">LEVEL 2</div>
+    <div class="page-header-text">
+      <h2>Container Diagram</h2>
+      <p>Zooms inside <strong>Tablero</strong> to show its containers &mdash; the deployable units and data stores that make up the system. Each microservice is an independently deployable .NET 10 / ASP.NET Core application with its own PostgreSQL database. Services communicate asynchronously via Kafka events and in real-time via SignalR WebSocket hubs.</p>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <h4>WHAT THIS DIAGRAM SHOWS</h4>
+      <p>The deployable pieces inside the system boundary: YARP API Gateway, six implemented ASP.NET Core Web API services, SharedKernel and Contracts projects, plus a planned Delivery Service. The target architecture keeps one PostgreSQL database per domain service, Apache Kafka with Transactional Outbox + outbox publishers, Redis, service discovery, 6 SignalR hubs, and OpenTelemetry + Grafana observability.</p>
+    </div>
+    <div class="info-box">
+      <h4>KEY ARCHITECTURAL DECISION</h4>
+      <p><strong>Microservices with Database-Per-Service.</strong> Each service owns its data exclusively &mdash; no shared databases. Inter-service communication uses Kafka (via Transactional Outbox + Outbox publisher) for async events and REST/HTTP with Polly + Refit circuit breakers for synchronous queries. YARP Reverse Proxy performs centralized JWT validation and forwards identity headers (X-User-Id, X-User-Role, X-User-Email, X-Restaurant-Id) &mdash; downstream services never parse JWTs. 6 SignalR hubs provide real-time WebSocket communication for kitchen, waiter, table, courier, cashier, and notification channels.</p>
+    </div>
+  </div>
+
+  <!-- DIAGRAM -->
+  <div class="section">
+    <div class="section-title">Diagram</div>
+    <div class="container-diagram">
+      <div class="container-grid">
+
+        <!-- LEFT &mdash; Users -->
+        <div>
+          <div style="font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:2px; margin-bottom:12px; text-align:center;">USERS</div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="node-card person-card" style="padding:14px;">
+              <span class="n-icon" style="font-size:20px;">&#x1F464;</span>
+              <span class="n-type" style="font-size:8px;">[Person]</span>
+              <span class="n-name" style="font-size:12px;">Guest</span>
+            </div>
+            <div class="node-card person-card" style="padding:14px;">
+              <span class="n-icon" style="font-size:20px;">&#x1F37D;&#xFE0F;</span>
+              <span class="n-type" style="font-size:8px;">[Person]</span>
+              <span class="n-name" style="font-size:12px;">Customer</span>
+            </div>
+            <div class="node-card person-card" style="padding:14px;">
+              <span class="n-icon" style="font-size:20px;">&#x1F468;&#x200D;&#x1F373;</span>
+              <span class="n-type" style="font-size:8px;">[Person]</span>
+              <span class="n-name" style="font-size:12px;">Waiter / Chef / Cashier</span>
+            </div>
+            <div class="node-card person-card" style="padding:14px;">
+              <span class="n-icon" style="font-size:20px;">&#x1F6F5;</span>
+              <span class="n-type" style="font-size:8px;">[Person]</span>
+              <span class="n-name" style="font-size:12px;">Courier</span>
+            </div>
+            <div class="node-card person-card" style="padding:14px;">
+              <span class="n-icon" style="font-size:20px;">&#x1F4BC;</span>
+              <span class="n-type" style="font-size:8px;">[Person]</span>
+              <span class="n-name" style="font-size:12px;">Admin / Director</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CENTER &mdash; System Boundary -->
+        <div>
+          <div style="font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:2px; margin-bottom:12px; text-align:center;">BITE [SOFTWARE SYSTEM]</div>
+          <div class="boundary-box">
+            <span class="boundary-label">Tablero [Software System]</span>
+            <div class="boundary-inner">
+
+              <!-- API Gateway -->
+              <div class="node-card system-card" style="border-width:3px;">
+                <span class="n-icon">&#x1F6E1;&#xFE0F;</span>
+                <span class="n-type">[Container: YARP Reverse Proxy]</span>
+                <span class="n-name">API Gateway</span>
+                <span class="n-desc">Single entry point for all client requests. Validates JWT centrally, extracts user identity, and forwards X-User-Id, X-User-Role, X-User-Email, X-Restaurant-Id headers to downstream services. Routes requests to the appropriate microservice via Consul discovery. Public menu endpoints bypass JWT.</span>
+                <span class="n-tech">YARP Reverse Proxy &middot; Port 5000</span>
+              </div>
+
+              <div class="v-arrow">&darr;</div>
+
+              <!-- Microservices Row &mdash; current and planned services -->
+              <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
+
+                <div class="service-card system-card">
+                  <span class="s-icon">&#x1F510;</span>
+                  <span class="s-type">[Container: .NET 10 / ASP.NET Core]</span>
+                  <span class="s-name">Identity Service</span>
+                  <span class="s-desc">Auth, JWT, refresh tokens, profile, password reset OTP, role management</span>
+                  <span class="s-tech">Port 5001</span>
+                </div>
+
+                <div class="service-card system-card">
+                  <span class="s-icon">&#x1F3EA;</span>
+                  <span class="s-type">[Container: .NET 10 / ASP.NET Core]</span>
+                  <span class="s-name">Restaurant Service</span>
+                  <span class="s-desc">Restaurant info, photos, QR codes, public menu cache, aggregated ratings</span>
+                  <span class="s-tech">Port 5002</span>
+                </div>
+
+                <div class="service-card system-card">
+                  <span class="s-icon">&#x1F4C5;</span>
+                  <span class="s-type">[Container: .NET 10 / ASP.NET Core]</span>
+                  <span class="s-name">Reservation Service</span>
+                  <span class="s-desc">Table layout, time slots, booking lifecycle, pre-orders, Redis locks</span>
+                  <span class="s-tech">Port 5003</span>
+                </div>
+
+                <div class="service-card system-card">
+                  <span class="s-icon">&#x1F373;</span>
+                  <span class="s-type">[Container: .NET 10 / ASP.NET Core]</span>
+                  <span class="s-name">Order &amp; Kitchen Service</span>
+                  <span class="s-desc">Canonical menu, order placement, KDS via SignalR, printer webhook</span>
+                  <span class="s-tech">Port 5004</span>
+                </div>
+
+              </div>
+
+              <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:10px;">
+
+                <div class="service-card system-card">
+                  <span class="s-icon">&#x1F4B0;</span>
+                  <span class="s-type">[Container: .NET 10 / ASP.NET Core]</span>
+                  <span class="s-name">Payment &amp; Loyalty Service</span>
+                  <span class="s-desc">Invoices, Stripe, cashier POS, split bill, loyalty points, bonus catalogue</span>
+                  <span class="s-tech">Port 5005</span>
+                </div>
+
+                <div class="service-card system-card">
+                  <span class="s-icon">&#x1F69A;</span>
+                  <span class="s-type">[Container: .NET 10 / ASP.NET Core]</span>
+                  <span class="s-name">Delivery Service</span>
+                  <span class="s-desc">Delivery lifecycle, courier assignment via Redis lock, GPS tracking</span>
+                  <span class="s-tech">Port 5006</span>
+                </div>
+
+                <div class="service-card system-card">
+                  <span class="s-icon">&#x1F514;</span>
+                  <span class="s-type">[Container: .NET 10 / ASP.NET Core]</span>
+                  <span class="s-name">Notification &amp; Review Service</span>
+                  <span class="s-desc">Email, SMS, push notifications, reviews, moderation, rating aggregation</span>
+                  <span class="s-tech">Port 5007</span>
+                </div>
+
+              </div>
+
+              <div class="v-arrow">&darr;</div>
+
+              <!-- Infrastructure Row 1 &mdash; Platform -->
+              <div class="infra-grid">
+
+                <div class="node-card container-card">
+                  <span class="n-icon">&#x1F50D;</span>
+                  <span class="n-type">[Container: Consul]</span>
+                  <span class="n-name">Consul</span>
+                  <span class="n-desc">Service discovery. All microservices register on startup. YARP gateway and Refit clients discover services by name.</span>
+                  <span class="n-tech">Consul &middot; Port 8500</span>
+                </div>
+
+                <div class="node-card container-card">
+                  <span class="n-icon">&#x1F4E1;</span>
+                  <span class="n-type">[Container: SignalR (planned)]</span>
+                  <span class="n-name">SignalR Hubs (6)</span>
+                  <span class="n-desc">Real-time WebSocket communication: KitchenHub, WaiterHub, TableHub, CourierHub, NotifyHub, CashierHub. Embedded in their respective services.</span>
+                  <span class="n-tech">SignalR (planned)</span>
+                </div>
+
+                <div class="node-card container-card">
+                  <span class="n-icon">&#x1F52C;</span>
+                  <span class="n-type">[Container: Grafana Stack]</span>
+                  <span class="n-name">Grafana Stack</span>
+                  <span class="n-desc">Grafana Tempo for distributed tracing (OTLP), Grafana Loki + Promtail for centralized log aggregation, Grafana for dashboards.</span>
+                  <span class="n-tech">Tempo :3200 &middot; Loki :3100 &middot; Grafana :3000</span>
+                </div>
+
+              </div>
+
+              <div class="v-arrow">&darr;</div>
+
+              <!-- Infrastructure Row 2 &mdash; Data -->
+              <div class="infra-grid">
+
+                <div class="node-card db-card">
+                  <span class="n-icon">&#x1F418;</span>
+                  <span class="n-type">[Container: PostgreSQL]</span>
+                  <span class="n-name">PostgreSQL (per service)</span>
+                  <span class="n-desc">Each microservice has its own PostgreSQL database. No shared database access. Each DB includes an outbox_events table for the Transactional Outbox pattern.</span>
+                  <span class="n-tech">PostgreSQL &middot; current + planned databases</span>
+                </div>
+
+                <div class="node-card kafka-card">
+                  <span class="n-icon">&#x1F4E8;</span>
+                  <span class="n-type">[Container: Apache Kafka 4]</span>
+                  <span class="n-name">Apache Kafka</span>
+                  <span class="n-desc">Async event bus. Events flow through the Transactional Outbox + Outbox publisher pattern. Dead Letter Topics (DLT) capture failed messages. All consumers are idempotent.</span>
+                  <span class="n-tech">Kafka 4 &middot; Port 9092</span>
+                </div>
+
+                <div class="node-card container-card">
+                  <span class="n-icon">&#x26A1;</span>
+                  <span class="n-type">[Container: Redis 7]</span>
+                  <span class="n-name">Redis</span>
+                  <span class="n-desc">Distributed locks (reservation double-booking, delivery first-accept), OTP cache (TTL 10 min), rate limiting on login.</span>
+                  <span class="n-tech">Redis 7 &middot; Port 6379</span>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT &mdash; External -->
+        <div>
+          <div style="font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:2px; margin-bottom:12px; text-align:center;">EXTERNAL SYSTEMS</div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="node-card external-card">
+              <span class="n-icon">&#x1F4B3;</span>
+              <span class="n-type" style="font-size:8px;">[External System]</span>
+              <span class="n-name" style="font-size:12px;">Stripe</span>
+              <span class="n-desc" style="font-size:10px;">Payment checkout sessions and webhook callbacks</span>
+              <span class="n-tech">Stripe.net SDK &middot; HTTPS</span>
+            </div>
+            <div class="node-card external-card">
+              <span class="n-icon">&#x1F4E7;</span>
+              <span class="n-type" style="font-size:8px;">[External System]</span>
+              <span class="n-name" style="font-size:12px;">SendGrid</span>
+              <span class="n-desc" style="font-size:10px;">Transactional and marketing email delivery</span>
+              <span class="n-tech">SendGrid SDK &middot; HTTPS</span>
+            </div>
+            <div class="node-card external-card">
+              <span class="n-icon">&#x1F4F1;</span>
+              <span class="n-type" style="font-size:8px;">[External System]</span>
+              <span class="n-name" style="font-size:12px;">Twilio</span>
+              <span class="n-desc" style="font-size:10px;">SMS for reminders, delivery alerts, courier broadcast</span>
+              <span class="n-tech">Twilio SDK &middot; HTTPS</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="diagram-title">Container diagram for Tablero<span class="dt-sub">Shows the containers that make up the system and how they interact</span></div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-box" style="background:var(--restaurant-bg); border-color:var(--restaurant-border);"></div> Microservice (.NET 10 / ASP.NET Core)</div>
+    <div class="legend-item"><div class="legend-box" style="background:var(--delivery-bg); border-color:var(--delivery-border);"></div> Database (per service)</div>
+    <div class="legend-item"><div class="legend-box" style="background:var(--reservation-bg); border-color:var(--reservation-border);"></div> Infrastructure / Observability / Cache</div>
+    <div class="legend-item"><div class="legend-box" style="background:var(--payment-bg); border-color:var(--payment-border);"></div> Message Broker</div>
+    <div class="legend-item"><div class="legend-box" style="background:var(--notify-bg); border-color:var(--notify-border);"></div> External System</div>
+  </div>
+
+  <!-- CONTAINER RELATIONSHIPS -->
+  <div class="section" style="margin-top:32px;">
+    <div class="section-title">Container Relationships</div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+      <table class="rel-table">
+        <thead>
+          <tr><th>From</th><th style="text-align:center;">&rarr;</th><th>To</th><th>Description</th><th>Protocol</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="from">Users (all roles)</td><td class="arrow">&rarr;</td><td class="to">API Gateway (YARP)</td><td class="desc">All API calls enter through the gateway, which validates JWT and routes to the appropriate microservice</td><td class="tech">REST / HTTPS / JSON</td></tr>
+          <tr><td class="from">API Gateway</td><td class="arrow">&rarr;</td><td class="to">All Microservices</td><td class="desc">Validates JWT centrally, extracts claims, forwards X-User-Id / X-User-Role / X-User-Email / X-Restaurant-Id headers</td><td class="tech">REST / HTTP + Headers</td></tr>
+          <tr><td class="from">API Gateway</td><td class="arrow">&rarr;</td><td class="to">Consul</td><td class="desc">Discovers service instances by name for request routing</td><td class="tech">Consul Client</td></tr>
+          <tr><td class="from">All Microservices</td><td class="arrow">&rarr;</td><td class="to">Consul</td><td class="desc">Register on startup, send heartbeats, deregister on shutdown</td><td class="tech">Consul Client</td></tr>
+          <tr><td class="from">All Microservices</td><td class="arrow">&rarr;</td><td class="to">Grafana Tempo</td><td class="desc">Export distributed trace spans via OpenTelemetry OTLP protocol</td><td class="tech">OpenTelemetry / OTLP</td></tr>
+          <tr><td class="from">All Microservices</td><td class="arrow">&rarr;</td><td class="to">Grafana Loki</td><td class="desc">Ship structured application logs for centralized aggregation and search</td><td class="tech">Promtail / HTTP</td></tr>
+          <tr><td class="from">Each Microservice</td><td class="arrow">&rarr;</td><td class="to">Own PostgreSQL DB</td><td class="desc">Reads/writes business data + outbox_events table in the same transaction</td><td class="tech">EF Core 10 / Npgsql</td></tr>
+          <tr><td class="from">Outbox workers</td><td class="arrow">&rarr;</td><td class="to">Kafka</td><td class="desc">Currently process pending outbox events locally and publish them to Kafka topics; Kafka/Debezium CDC can be added later if needed</td><td class="tech">BackgroundService + Kafka producer</td></tr>
+          <tr><td class="from">Reservation Service</td><td class="arrow">&rarr;</td><td class="to">Redis</td><td class="desc">Sets distributed locks during booking creation to prevent double-booking on concurrent requests</td><td class="tech">StackExchange.Redis</td></tr>
+          <tr><td class="from">Delivery Service</td><td class="arrow">&rarr;</td><td class="to">Redis</td><td class="desc">First-accept lock for courier assignment &mdash; TTL 5 sec prevents race conditions</td><td class="tech">StackExchange.Redis</td></tr>
+          <tr><td class="from">Identity Service</td><td class="arrow">&rarr;</td><td class="to">Redis</td><td class="desc">Stores password reset OTPs (TTL 10 min) and login rate-limit counters</td><td class="tech">StackExchange.Redis</td></tr>
+          <tr><td class="from">Order &amp; Kitchen Service</td><td class="arrow">&rarr;</td><td class="to">SignalR (KitchenHub + WaiterHub + TableHub)</td><td class="desc">Pushes real-time order updates to chef screens, waiter phones, and customer tables</td><td class="tech">SignalR (planned) / WebSocket</td></tr>
+          <tr><td class="from">Delivery Service</td><td class="arrow">&rarr;</td><td class="to">SignalR (CourierHub)</td><td class="desc">Broadcasts new delivery orders to all online couriers in the restaurant</td><td class="tech">SignalR (planned) / WebSocket</td></tr>
+          <tr><td class="from">Payment &amp; Loyalty</td><td class="arrow">&rarr;</td><td class="to">SignalR (CashierHub)</td><td class="desc">Pushes bill requests and payment confirmations to cashier POS terminal</td><td class="tech">SignalR (planned) / WebSocket</td></tr>
+          <tr><td class="from">Notification &amp; Review</td><td class="arrow">&rarr;</td><td class="to">SignalR (NotifyHub)</td><td class="desc">Delivers in-app push notifications to all authenticated users</td><td class="tech">SignalR (planned) / WebSocket</td></tr>
+          <tr><td class="from">Kafka</td><td class="arrow">&rarr;</td><td class="to">Notification &amp; Review Service</td><td class="desc">Consumes all domain events (idempotent); dispatches emails, SMS, push notifications</td><td class="tech">Confluent.Kafka Consumer + DLT</td></tr>
+          <tr><td class="from">Kafka</td><td class="arrow">&rarr;</td><td class="to">Restaurant Service</td><td class="desc">Consumes review.submitted events to update denormalized aggregated ratings</td><td class="tech">Confluent.Kafka Consumer + DLT</td></tr>
+          <tr><td class="from">Kafka</td><td class="arrow">&rarr;</td><td class="to">Order &amp; Kitchen Service</td><td class="desc">Consumes reservation.seated events to forward pre-orders to kitchen queue</td><td class="tech">Confluent.Kafka Consumer + DLT</td></tr>
+          <tr><td class="from">Payment &amp; Loyalty Service</td><td class="arrow">&rarr;</td><td class="to">Stripe</td><td class="desc">Creates Stripe Checkout sessions for card payments</td><td class="tech">Stripe.net SDK / HTTPS</td></tr>
+          <tr><td class="from">Stripe</td><td class="arrow">&rarr;</td><td class="to">Payment &amp; Loyalty Service</td><td class="desc">Fires webhook events for payment success, failure, or refund</td><td class="tech">HTTPS Webhook / JSON</td></tr>
+          <tr><td class="from">Notification &amp; Review Service</td><td class="arrow">&rarr;</td><td class="to">SendGrid</td><td class="desc">Sends transactional and marketing emails when Kafka events are consumed</td><td class="tech">SendGrid SDK / HTTPS</td></tr>
+          <tr><td class="from">Notification &amp; Review Service</td><td class="arrow">&rarr;</td><td class="to">Twilio</td><td class="desc">Sends SMS for reservation reminders, delivery updates, courier broadcasts</td><td class="tech">Twilio SDK / HTTPS</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- =========================================== LEVEL 3 =========================================== -->
+<div class="page" id="l3">
+
+  <div class="page-header">
+    <div class="level-badge">LEVEL 3</div>
+    <div class="page-header-text">
+      <h2>Component Diagram</h2>
+      <p>Zooms inside each <strong>microservice</strong> to show its internal components. Each service is an .NET 10 / ASP.NET Core application with its own controllers, services, repositories, and domain entities. Services communicate through REST/HTTP for synchronous queries and Kafka events for async notifications. No service directly accesses another service's database.</p>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <h4>MICROSERVICE RULES</h4>
+      <p>1. Each service owns its own database &mdash; no shared DB access. 2. Synchronous cross-service calls use REST/HTTP via Refit with Polly circuit breakers. 3. Async events go through the Transactional Outbox pattern (write to outbox table &rarr; Outbox publisher &rarr; Kafka). All consumers are idempotent with Dead Letter Topics. 4. YARP Gateway validates JWT centrally and forwards X-User-Id, X-User-Role, X-User-Email, X-Restaurant-Id headers &mdash; downstream services just read headers.</p>
+    </div>
+    <div class="info-box">
+      <h4>WHY THIS STRUCTURE</h4>
+      <p>Each microservice is independently deployable, scalable, and maintainable. Order &amp; Kitchen Service combines menu management and kitchen operations into one bounded context (canonical menu + order lifecycle). Payment &amp; Loyalty Service combines invoicing and loyalty &mdash; bonus redemption creates a zero-price line item on the same invoice. Database-per-service ensures strong data ownership.</p>
+    </div>
+  </div>
+
+  <!-- MS1 &mdash; Identity Service -->
+  <div class="section">
+    <div class="section-title">MS1 &mdash; Identity Service (Auth + Users + Security)</div>
+    <div class="component-grid">
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F510;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">AuthController</span>
+        <div class="ci-desc">Register, login (email or username auto-detect), refresh token, logout.</div>
+        <div class="ci-endpoints">POST /auth/register<br>POST /auth/login<br>POST /auth/refresh<br>POST /auth/logout</div>
+        <span class="ci-tech">ASP.NET Core Identity + JWT Bearer</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F464;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">ProfileController</span>
+        <div class="ci-desc">Update profile (name, avatar, phone, username), password reset via OTP.</div>
+        <div class="ci-endpoints">GET /profile<br>PATCH /profile<br>POST /profile/avatar<br>POST /auth/forgot-password<br>POST /auth/reset-password</div>
+        <span class="ci-tech">Redis OTP cache &middot; SendGrid</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F6E1;&#xFE0F;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">RoleController</span>
+        <div class="ci-desc">Assign/change roles, suspend/reactivate accounts. Admin and Director access only.</div>
+        <div class="ci-endpoints">POST /roles/assign<br>PATCH /users/{id}/suspend<br>PATCH /users/{id}/reactivate</div>
+        <span class="ci-tech">Role-based authorization</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x2699;&#xFE0F;</span>
+        <span class="ci-type">SERVICE</span>
+        <span class="ci-name">TokenService</span>
+        <div class="ci-desc">JWT generation (15 min), refresh token issuance (7 days), rotation with device fingerprint, invalidation.</div>
+        <span class="ci-tech">PBKDF2 &middot; JWT &middot; Redis</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E8;</span>
+        <span class="ci-type">KAFKA PRODUCER</span>
+        <span class="ci-name">Identity Events</span>
+        <div class="ci-desc">Publishes events to outbox table: user.registered, user.password.reset.requested.</div>
+        <span class="ci-tech">Transactional Outbox + worker</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4BE;</span>
+        <span class="ci-type">REPOSITORY</span>
+        <span class="ci-name">UserRepository</span>
+        <div class="ci-desc">EF Core repository for users, refresh_tokens, outbox_events tables in identity_db.</div>
+        <span class="ci-tech">EF Core 10 &middot; PostgreSQL</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MS2 &mdash; Restaurant Service -->
+  <div class="section">
+    <div class="section-title">MS2 &mdash; Restaurant Service (Info + Menu Cache + QR)</div>
+    <div class="component-grid">
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F3EA;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">RestaurantController</span>
+        <div class="ci-desc">CRUD restaurant info, operating hours, holiday schedule, geolocation. Multi-branch scoped by restaurant_id.</div>
+        <div class="ci-endpoints">GET /restaurants<br>GET /restaurants/{id}<br>POST /restaurants<br>PATCH /restaurants/{id}</div>
+        <span class="ci-tech">Admin / Director access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4F7;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">GalleryController</span>
+        <div class="ci-desc">Upload photos, set primary image, delete. CDN-served URLs. Public read access.</div>
+        <div class="ci-endpoints">GET /restaurants/{id}/photos<br>POST /restaurants/{id}/photos<br>DELETE /restaurants/{id}/photos/{photoId}</div>
+        <span class="ci-tech">CDN URL storage</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4F1;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">QrCodeController</span>
+        <div class="ci-desc">Generate QR codes per table encoding restaurantId + tableId. Returns PNG or SVG.</div>
+        <div class="ci-endpoints">GET /restaurants/{id}/tables/{tableId}/qr</div>
+        <span class="ci-tech">QRCoder NuGet</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4CB;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">PublicMenuController</span>
+        <div class="ci-desc">Read-only cached menu. No auth required (YARP bypass). Synced from Order Service via menu.item.updated events.</div>
+        <div class="ci-endpoints">GET /restaurants/{id}/menu</div>
+        <span class="ci-tech">Public &middot; No JWT</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E8;</span>
+        <span class="ci-type">KAFKA CONSUMER</span>
+        <span class="ci-name">Rating &amp; Menu Events</span>
+        <div class="ci-desc">Consumes review.submitted to update denormalized aggregated ratings. Consumes menu.item.updated to sync public menu cache.</div>
+        <span class="ci-tech">Confluent.Kafka Consumer + DLT</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4BE;</span>
+        <span class="ci-type">REPOSITORY</span>
+        <span class="ci-name">RestaurantRepository</span>
+        <div class="ci-desc">EF Core repository for restaurants, photos, menu_cache, ratings tables in restaurant_db.</div>
+        <span class="ci-tech">EF Core 10 &middot; PostgreSQL</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MS3 &mdash; Reservation Service -->
+  <div class="section">
+    <div class="section-title">MS3 &mdash; Reservation Service (Tables + Bookings + Pre-Orders)</div>
+    <div class="component-grid">
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4C5;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">ReservationController</span>
+        <div class="ci-desc">Create reservation with date + slot + party size, cancel, confirm, complete, mark no-show. Status lifecycle management.</div>
+        <div class="ci-endpoints">POST /reservations<br>PATCH /reservations/{id}/cancel<br>PATCH /reservations/{id}/confirm<br>PATCH /reservations/{id}/seat<br>PATCH /reservations/{id}/complete</div>
+        <span class="ci-tech">Redis distributed lock</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4BA;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">TableController</span>
+        <div class="ci-desc">Table layout management &mdash; indoor / outdoor / bar / terrace zones. Time slot configuration per restaurant.</div>
+        <div class="ci-endpoints">GET /tables<br>POST /tables<br>PATCH /tables/{id}<br>GET /tables/{id}/slots</div>
+        <span class="ci-tech">Admin access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F35D;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">PreOrderController</span>
+        <div class="ci-desc">Attach food items to a reservation before arrival. Forwarded to kitchen on seating via reservation.seated event.</div>
+        <div class="ci-endpoints">POST /reservations/{id}/pre-orders<br>GET /reservations/{id}/pre-orders</div>
+        <span class="ci-tech">Kafka event on seat</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x23F0;</span>
+        <span class="ci-type">SERVICE</span>
+        <span class="ci-name">ReminderScheduler</span>
+        <div class="ci-desc">Quartz.NET scheduler sends reservation.reminder event 24h before reservation time.</div>
+        <span class="ci-tech">Quartz.NET &middot; Outbox</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E8;</span>
+        <span class="ci-type">KAFKA PRODUCER</span>
+        <span class="ci-name">Reservation Events</span>
+        <div class="ci-desc">Publishes: reservation.confirmed, reservation.seated, reservation.cancelled, reservation.completed, reservation.no_show, reservation.reminder.</div>
+        <span class="ci-tech">Transactional Outbox + worker</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4BE;</span>
+        <span class="ci-type">REPOSITORY</span>
+        <span class="ci-name">ReservationRepository</span>
+        <div class="ci-desc">EF Core repository for reservations, tables, time_slots, reservation_pre_orders, outbox_events in reservation_db.</div>
+        <span class="ci-tech">EF Core 10 &middot; PostgreSQL</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MS4 &mdash; Order & Kitchen Service -->
+  <div class="section">
+    <div class="section-title">MS4 &mdash; Order &amp; Kitchen Service (Menu + Orders + KDS)</div>
+    <div class="component-grid">
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4CB;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">MenuController</span>
+        <div class="ci-desc">Canonical menu CRUD &mdash; categories, items, modifiers, pricing, allergens. Mark items unavailable (86'd).</div>
+        <div class="ci-endpoints">GET /menu<br>POST /menu/categories<br>POST /menu/items<br>PATCH /menu/items/{id}<br>PATCH /menu/items/{id}/unavailable</div>
+        <span class="ci-tech">Admin access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E6;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">OrderController</span>
+        <div class="ci-desc">Place order (table / delivery / pre-order). Scoped to session. Price snapshot at order time. Cancel order.</div>
+        <div class="ci-endpoints">POST /orders<br>GET /orders/{id}<br>PATCH /orders/{id}/cancel<br>GET /orders/table/{tableId}</div>
+        <span class="ci-tech">Customer + Waiter access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F373;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">KitchenController</span>
+        <div class="ci-desc">Kitchen display system. Update item status QUEUED &rarr; PREPARING &rarr; READY. Call waiter for pickup.</div>
+        <div class="ci-endpoints">GET /kitchen/queue<br>PATCH /kitchen/items/{id}/status<br>POST /kitchen/call-waiter</div>
+        <span class="ci-tech">Chef access &middot; KitchenHub SignalR</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E1;</span>
+        <span class="ci-type">SIGNALR HUB</span>
+        <span class="ci-name">KitchenHub + WaiterHub + TableHub</span>
+        <div class="ci-desc">KitchenHub: chef screens (kitchen:{restaurantId}). WaiterHub: waiter phones (waiter:{waiterId}). TableHub: customer at table (table:{tableId}).</div>
+        <span class="ci-tech">SignalR (planned)</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F5A8;&#xFE0F;</span>
+        <span class="ci-type">SERVICE</span>
+        <span class="ci-name">PrinterWebhookService</span>
+        <div class="ci-desc">POSTs order ticket to configurable kitchen printer endpoint. ZPL or ESC/POS JSON payload. Optional per restaurant.</div>
+        <span class="ci-tech">HttpClient &middot; Webhook</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E8;</span>
+        <span class="ci-type">KAFKA PRODUCER + CONSUMER</span>
+        <span class="ci-name">Order Events</span>
+        <div class="ci-desc">Publishes: order.placed, order.item.ready, order.ready, order.served, order.cancelled, menu.item.unavailable. Consumes: reservation.seated (pre-orders).</div>
+        <span class="ci-tech">Outbox worker &middot; Consumer + DLT</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MS5 &mdash; Payment & Loyalty Service -->
+  <div class="section">
+    <div class="section-title">MS5 &mdash; Payment &amp; Loyalty Service (Invoices + Stripe + Bonuses)</div>
+    <div class="component-grid">
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F9FE;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">InvoiceController</span>
+        <div class="ci-desc">Invoice generation from completed orders. View invoice, initiate Stripe checkout, split bill across customers.</div>
+        <div class="ci-endpoints">GET /invoices/{id}<br>POST /invoices/{id}/checkout<br>POST /invoices/{id}/split</div>
+        <span class="ci-tech">Stripe.net SDK</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4B5;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">CashierController</span>
+        <div class="ci-desc">Dedicated POS endpoints. Mark cash payment, release table, view pending bills. Minimal UI scope.</div>
+        <div class="ci-endpoints">GET /cashier/bills<br>POST /cashier/bills/{id}/pay-cash<br>POST /cashier/tables/{id}/release</div>
+        <span class="ci-tech">Cashier role &middot; CashierHub</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4B0;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">BalanceController</span>
+        <div class="ci-desc">Account balance top-up and deductions. Delivery pre-payment hold (not transfer). Balance release on delivery confirmation.</div>
+        <div class="ci-endpoints">GET /balance<br>POST /balance/top-up<br>POST /balance/hold<br>POST /balance/release</div>
+        <span class="ci-tech">Customer access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x2B50;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">LoyaltyController</span>
+        <div class="ci-desc">View loyalty points, bonus catalogue (food items redeemable for points), redeem bonus &rarr; zero-price line item.</div>
+        <div class="ci-endpoints">GET /loyalty/points<br>GET /loyalty/bonuses<br>POST /loyalty/redeem</div>
+        <span class="ci-tech">Director-configurable rates</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E8;</span>
+        <span class="ci-type">KAFKA PRODUCER + CONSUMER</span>
+        <span class="ci-name">Payment Events</span>
+        <div class="ci-desc">Publishes: payment.succeeded, payment.failed, payment.cash.recorded, invoice.generated, bonus.earned, bonus.redeemed. Consumes: order.ready (invoice trigger), delivery.confirmed (balance release).</div>
+        <span class="ci-tech">Outbox worker &middot; Consumer + DLT</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4BE;</span>
+        <span class="ci-type">REPOSITORY</span>
+        <span class="ci-name">PaymentRepository</span>
+        <div class="ci-desc">EF Core + Dapper repository for invoices, payments, user_balances, loyalty_points, bonus_catalogue, outbox_events in payment_db.</div>
+        <span class="ci-tech">EF Core 10 + Dapper &middot; PostgreSQL</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MS6 &mdash; Delivery Service -->
+  <div class="section">
+    <div class="section-title">MS6 &mdash; Delivery Service (Orders + Couriers + GPS)</div>
+    <div class="component-grid">
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F69A;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">DeliveryController</span>
+        <div class="ci-desc">Create delivery order (triggers balance hold), customer confirms receipt, auto-confirm after 2h.</div>
+        <div class="ci-endpoints">POST /deliveries<br>GET /deliveries/{id}<br>PATCH /deliveries/{id}/confirm</div>
+        <span class="ci-tech">Customer access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F6F5;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">CourierController</span>
+        <div class="ci-desc">Toggle online/offline, accept delivery (first-come Redis lock), add GPS checkpoint, view assigned deliveries.</div>
+        <div class="ci-endpoints">PATCH /couriers/status<br>POST /deliveries/{id}/accept<br>POST /deliveries/{id}/checkpoints<br>GET /couriers/deliveries</div>
+        <span class="ci-tech">Redis lock &middot; CourierHub</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4CD;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">TrackingController</span>
+        <div class="ci-desc">Customer views courier GPS checkpoints (last N positions). Full history retained for audit.</div>
+        <div class="ci-endpoints">GET /deliveries/{id}/tracking</div>
+        <span class="ci-tech">Customer access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x2B50;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">CourierRatingController</span>
+        <div class="ci-desc">Customer rates courier (1&ndash;5 stars + comment) after delivery. Average computed on query via Dapper.</div>
+        <div class="ci-endpoints">POST /deliveries/{id}/rate<br>GET /couriers/{id}/rating</div>
+        <span class="ci-tech">Dapper aggregate query</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E1;</span>
+        <span class="ci-type">SIGNALR HUB</span>
+        <span class="ci-name">CourierHub</span>
+        <div class="ci-desc">Broadcasts new delivery orders to all online couriers in group couriers:{restaurantId}. Pushes assignment confirmation.</div>
+        <span class="ci-tech">SignalR (planned)</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E8;</span>
+        <span class="ci-type">KAFKA PRODUCER</span>
+        <span class="ci-name">Delivery Events</span>
+        <div class="ci-desc">Publishes: delivery.broadcast, delivery.assigned, delivery.checkpoint, delivery.confirmed, delivery.rated.</div>
+        <span class="ci-tech">Transactional Outbox + worker</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MS7 &mdash; Notification & Review Service -->
+  <div class="section">
+    <div class="section-title">MS7 &mdash; Notification &amp; Review Service (Alerts + Reviews + Ratings)</div>
+    <div class="component-grid">
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F514;</span>
+        <span class="ci-type">SERVICE</span>
+        <span class="ci-name">NotificationDispatcher</span>
+        <div class="ci-desc">Consumes ALL platform events. Routes to appropriate channel: email (SendGrid), SMS (Twilio), in-app push (SignalR NotifyHub + FCM).</div>
+        <span class="ci-tech">SendGrid + Twilio + SignalR</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4DD;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">ReviewController</span>
+        <div class="ci-desc">Submit review (chef, waiter, cleanliness, service ratings + comment). Only after COMPLETED reservation or confirmed delivery.</div>
+        <div class="ci-endpoints">POST /reviews<br>GET /reviews/restaurant/{id}</div>
+        <span class="ci-tech">Unique per reservation/delivery</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F6E1;&#xFE0F;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">ModerationController</span>
+        <div class="ci-desc">Admin approves or rejects reviews before publication. Aggregated ratings recalculated on approval.</div>
+        <div class="ci-endpoints">GET /moderation/pending<br>PATCH /moderation/{id}/approve<br>PATCH /moderation/{id}/reject</div>
+        <span class="ci-tech">Admin access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x2699;&#xFE0F;</span>
+        <span class="ci-type">CONTROLLER</span>
+        <span class="ci-name">PreferencesController</span>
+        <div class="ci-desc">Per-customer notification opt-out: toggle SMS / email per notification category.</div>
+        <div class="ci-endpoints">GET /notifications/preferences<br>PATCH /notifications/preferences</div>
+        <span class="ci-tech">Customer access</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E1;</span>
+        <span class="ci-type">SIGNALR HUB</span>
+        <span class="ci-name">NotifyHub</span>
+        <div class="ci-desc">Delivers in-app push notifications to user:{userId} groups. Bonus earned, review prompts, general alerts.</div>
+        <span class="ci-tech">SignalR (planned) + FCM</span>
+      </div>
+
+      <div class="component-item">
+        <span class="ci-icon">&#x1F4E8;</span>
+        <span class="ci-type">KAFKA CONSUMER + PRODUCER</span>
+        <span class="ci-name">Notification Events</span>
+        <div class="ci-desc">Consumes all domain events (idempotent). Publishes: review.submitted (triggers rating update in Restaurant Service). Audit log for all sent notifications.</div>
+        <span class="ci-tech">Consumer + DLT &middot; Outbox</span>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- =========================================== LEVEL 4 =========================================== -->
+<div class="page" id="l4">
+
+  <div class="page-header">
+    <div class="level-badge">LEVEL 4</div>
+    <div class="page-header-text">
+      <h2>Code &mdash; Entity Diagram</h2>
+      <p>The deepest level of detail. Shows the key domain entities within each service's database &mdash; the tables, their primary fields, and how they relate. Each service owns its own PostgreSQL database; cross-service references use denormalized IDs (UUIDs), never foreign keys.</p>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <h4>CONVENTIONS</h4>
+      <p>All primary keys are UUIDs. Timestamps are <code>timestamptz</code>. Every database has an <code>outbox_events</code> table for the Transactional Outbox pattern. Cross-service IDs are stored as plain UUIDs with no FK constraint. Soft deletes where applicable.</p>
+    </div>
+    <div class="info-box">
+      <h4>ORM STRATEGY</h4>
+      <p>EF Core 10 for writes and migrations. Dapper for complex read queries (aggregations, reports, joins). PostgreSQL with JSONB support for flexible metadata columns.</p>
+    </div>
+  </div>
+
+  <!-- Identity DB -->
+  <div class="section">
+    <div class="section-title">identity_db &mdash; Identity Service</div>
+    <div class="entity-modules">
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--identity-bg); color:var(--identity-text);">&#x1F464; users</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">users</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">email</span><span class="em-field-type">VARCHAR UNIQUE</span></div>
+              <div class="em-field"><span class="em-field-name">username</span><span class="em-field-type">VARCHAR UNIQUE</span></div>
+              <div class="em-field"><span class="em-field-name">password_hash</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">full_name</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">phone</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">avatar_url</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">role</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">is_suspended</span><span class="em-field-type">BOOLEAN</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--identity-bg); color:var(--identity-text);">&#x1F510; refresh_tokens</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">refresh_tokens</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name fk">user_id</span><span class="em-field-type">UUID FK &rarr; users</span></div>
+              <div class="em-field"><span class="em-field-name">token_hash</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">device_fingerprint</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">expires_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+              <div class="em-field"><span class="em-field-name">is_revoked</span><span class="em-field-type">BOOLEAN</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--identity-bg); color:var(--identity-text);">&#x1F4E8; outbox_events</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">outbox_events</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">aggregate_type</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">aggregate_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">event_type</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">payload</span><span class="em-field-type">JSONB</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Restaurant DB -->
+  <div class="section">
+    <div class="section-title">restaurant_db &mdash; Restaurant Service</div>
+    <div class="entity-modules">
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--restaurant-bg); color:var(--restaurant-text);">&#x1F3EA; restaurants</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">restaurants</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">name</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">address</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">lat</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">lng</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">operating_hours</span><span class="em-field-type">JSONB</span></div>
+              <div class="em-field"><span class="em-field-name">overall_rating</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">owner_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--restaurant-bg); color:var(--restaurant-text);">&#x1F4F7; photos</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">photos</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name fk">restaurant_id</span><span class="em-field-type">UUID FK &rarr; restaurants</span></div>
+              <div class="em-field"><span class="em-field-name">url</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">is_primary</span><span class="em-field-type">BOOLEAN</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--restaurant-bg); color:var(--restaurant-text);">&#x1F4CB; menu_cache</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">menu_cache</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name fk">restaurant_id</span><span class="em-field-type">UUID FK &rarr; restaurants</span></div>
+              <div class="em-field"><span class="em-field-name">item_name</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">category</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">price</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">is_available</span><span class="em-field-type">BOOLEAN</span></div>
+              <div class="em-field"><span class="em-field-name">source_item_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">updated_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Reservation DB -->
+  <div class="section">
+    <div class="section-title">reservation_db &mdash; Reservation Service</div>
+    <div class="entity-modules">
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--reservation-bg); color:var(--reservation-text);">&#x1F4BA; tables</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">tables</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">label</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">zone</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">capacity</span><span class="em-field-type">INT</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--reservation-bg); color:var(--reservation-text);">&#x1F4C5; reservations</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">reservations</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">user_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name fk">table_id</span><span class="em-field-type">UUID FK &rarr; tables</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">date</span><span class="em-field-type">DATE</span></div>
+              <div class="em-field"><span class="em-field-name">slot_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">party_size</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">status</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--reservation-bg); color:var(--reservation-text);">&#x1F35D; reservation_pre_orders</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">reservation_pre_orders</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name fk">reservation_id</span><span class="em-field-type">UUID FK &rarr; reservations</span></div>
+              <div class="em-field"><span class="em-field-name">menu_item_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">quantity</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">notes</span><span class="em-field-type">TEXT</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Order DB -->
+  <div class="section">
+    <div class="section-title">order_db &mdash; Order &amp; Kitchen Service</div>
+    <div class="entity-modules">
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--order-bg); color:var(--order-text);">&#x1F4CB; menu_items</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">menu_items</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">category_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">name</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">price</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">allergens</span><span class="em-field-type">JSONB</span></div>
+              <div class="em-field"><span class="em-field-name">is_available</span><span class="em-field-type">BOOLEAN</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--order-bg); color:var(--order-text);">&#x1F4E6; orders</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">orders</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">user_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">table_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">type</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">status</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--order-bg); color:var(--order-text);">&#x1F373; order_items</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">order_items</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name fk">order_id</span><span class="em-field-type">UUID FK &rarr; orders</span></div>
+              <div class="em-field"><span class="em-field-name">menu_item_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">quantity</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">price_snapshot</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">status</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">notes</span><span class="em-field-type">TEXT</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Payment DB -->
+  <div class="section">
+    <div class="section-title">payment_db &mdash; Payment &amp; Loyalty Service</div>
+    <div class="entity-modules">
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--payment-bg); color:var(--payment-text);">&#x1F9FE; invoices</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">invoices</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">order_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">user_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">total</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">status</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">payment_method</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">stripe_session_id</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--payment-bg); color:var(--payment-text);">&#x1F4B0; user_balances</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">user_balances</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">user_id</span><span class="em-field-type">UUID UNIQUE</span></div>
+              <div class="em-field"><span class="em-field-name">available</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">held</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">loyalty_points</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">updated_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--payment-bg); color:var(--payment-text);">&#x2B50; bonus_catalogue</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">bonus_catalogue</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">item_name</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">points_cost</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">is_active</span><span class="em-field-type">BOOLEAN</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Delivery DB -->
+  <div class="section">
+    <div class="section-title">delivery_db &mdash; Delivery Service</div>
+    <div class="entity-modules">
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--delivery-bg); color:var(--delivery-text);">&#x1F69A; deliveries</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">deliveries</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">order_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">customer_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">courier_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">address</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">status</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+              <div class="em-field"><span class="em-field-name">confirmed_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--delivery-bg); color:var(--delivery-text);">&#x1F4CD; delivery_checkpoints</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">delivery_checkpoints</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name fk">delivery_id</span><span class="em-field-type">UUID FK &rarr; deliveries</span></div>
+              <div class="em-field"><span class="em-field-name">lat</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">lng</span><span class="em-field-type">DECIMAL</span></div>
+              <div class="em-field"><span class="em-field-name">recorded_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--delivery-bg); color:var(--delivery-text);">&#x2B50; courier_ratings</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">courier_ratings</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name fk">delivery_id</span><span class="em-field-type">UUID FK &rarr; deliveries</span></div>
+              <div class="em-field"><span class="em-field-name">courier_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">customer_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">stars</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">comment</span><span class="em-field-type">TEXT</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Notify DB -->
+  <div class="section">
+    <div class="section-title">notify_db &mdash; Notification &amp; Review Service</div>
+    <div class="entity-modules">
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--notify-bg); color:var(--notify-text);">&#x1F514; notifications</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">notifications</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">user_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">channel</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">subject</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">body</span><span class="em-field-type">TEXT</span></div>
+              <div class="em-field"><span class="em-field-name">delivery_status</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--notify-bg); color:var(--notify-text);">&#x1F4DD; reviews</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">reviews</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">user_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">restaurant_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">reservation_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">delivery_id</span><span class="em-field-type">UUID</span></div>
+              <div class="em-field"><span class="em-field-name">chef_rating</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">waiter_rating</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">cleanliness_rating</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">service_rating</span><span class="em-field-type">INT</span></div>
+              <div class="em-field"><span class="em-field-name">comment</span><span class="em-field-type">TEXT</span></div>
+              <div class="em-field"><span class="em-field-name">moderation_status</span><span class="em-field-type">VARCHAR</span></div>
+              <div class="em-field"><span class="em-field-name">created_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="entity-module">
+        <div class="em-header" style="background:var(--notify-bg); color:var(--notify-text);">&#x2699;&#xFE0F; notification_preferences</div>
+        <div class="em-body">
+          <div class="em-entity">
+            <span class="em-entity-name">notification_preferences</span>
+            <div class="em-fields">
+              <div class="em-field"><span class="em-field-name pk">id</span><span class="em-field-type">UUID PK</span></div>
+              <div class="em-field"><span class="em-field-name">user_id</span><span class="em-field-type">UUID UNIQUE</span></div>
+              <div class="em-field"><span class="em-field-name">email_enabled</span><span class="em-field-type">BOOLEAN</span></div>
+              <div class="em-field"><span class="em-field-name">sms_enabled</span><span class="em-field-type">BOOLEAN</span></div>
+              <div class="em-field"><span class="em-field-name">push_enabled</span><span class="em-field-type">BOOLEAN</span></div>
+              <div class="em-field"><span class="em-field-name">updated_at</span><span class="em-field-type">TIMESTAMPTZ</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- =========================================== JAVASCRIPT =========================================== -->
+<script>
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — Kafka Event Catalog</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html">Overview</a>
+  <a href="c4.html">C4 Architecture</a>
+  <a href="services.html">Services</a>
+  <a href="roles.html">Roles &amp; Flows</a>
+  <a href="database.html">Database</a>
+  <a href="api.html">API</a>
+  <a href="events.html" class="active">Kafka Events</a>
+</nav>
+
+<div class="site-header">
+  <span class="tag">ASYNC COMMUNICATION</span>
+  <h1>Kafka <span>Event Catalog</span></h1>
+  <p>All inter-service async communication flows through Apache Kafka. Events are never published directly from application code. Instead, they are written to the outbox_events table in the same database transaction as the business data (Transactional Outbox pattern), then outbox publishers read pending events and publish to Kafka.</p>
+</div>
+
+<div class="page-content">
+
+  <!-- Event Flow -->
+  <div class="section">
+    <div class="section-title">Event Flow</div>
+    <div class="flow-box">
+      <pre>
+Service writes business data + outbox event (same DB transaction)
+    |
+    v
+Outbox worker polls pending outbox_events rows
+    |
+    v
+Outbox publisher publishes event to Kafka topic
+    |
+    v
+Consumer(s) process event (idempotent — check if already handled)
+    |
+    v (on failure after 3 retries)
+Dead Letter Topic (topic-name.DLT)
+      </pre>
+    </div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>WHY TRANSACTIONAL OUTBOX</h4>
+        <p>Guarantees that business data and events are always consistent. If the DB transaction succeeds, the event will eventually be published. No dual-write problem. No lost events.</p>
+      </div>
+      <div class="info-box">
+        <h4>IDEMPOTENT CONSUMERS</h4>
+        <p>Every consumer checks if it has already processed a message before acting on it. This handles duplicate deliveries from Kafka retries or Kafka/outbox retries safely.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Identity Events -->
+  <div class="section">
+    <div class="section-title">Identity Events</div>
+    <div class="event-grid">
+      <div class="event-card">
+        <span class="ev-name">user.registered</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Identity Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; welcome email + SMS</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">New user registers successfully</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">user.password.reset.requested</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Identity Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; send OTP email</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">User requests password reset</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reservation Events -->
+  <div class="section">
+    <div class="section-title">Reservation Events</div>
+    <div class="event-grid-3">
+      <div class="event-card">
+        <span class="ev-name">reservation.confirmed</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Reservation Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; email + SMS to customer</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Status moves to CONFIRMED</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">reservation.seated</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Reservation Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Order &amp; Kitchen &rarr; push pre-ordered items to kitchen queue</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Waiter marks guests as seated</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">reservation.cancelled</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Reservation Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; email customer + staff; Payment &rarr; void any pending invoice</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Customer or admin cancels</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">reservation.completed</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Reservation Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; schedule review prompt (15 min delay)</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Reservation marked COMPLETED by waiter</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">reservation.no_show</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Reservation Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; alert manager; Payment &rarr; apply no-show fee if configured</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Waiter marks no-show</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">reservation.reminder</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Reservation Service (Quartz.NET nightly job)</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; email + SMS 24h before</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Reservations in the next 24h at midnight sweep</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order Events -->
+  <div class="section">
+    <div class="section-title">Order &amp; Kitchen Events</div>
+    <div class="event-grid-3">
+      <div class="event-card">
+        <span class="ev-name">order.placed</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Order &amp; Kitchen Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; KitchenHub push; Delivery &rarr; trigger courier broadcast if type=DELIVERY</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Customer or waiter places order</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">order.item.ready</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Order &amp; Kitchen Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; push to waiter via WaiterHub</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Chef marks a single item as READY</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">order.ready</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Order &amp; Kitchen Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; alert waiter; Payment &rarr; generate invoice; Delivery &rarr; trigger courier if DELIVERY</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">ALL items in order = READY</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">order.served</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Order &amp; Kitchen Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; push to customer via TableHub "Your order has arrived"</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Waiter marks order SERVED</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">order.cancelled</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Order &amp; Kitchen Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; notify chef + customer; Payment &rarr; cancel invoice</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Order cancelled before IN_KITCHEN</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">menu.item.unavailable</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Order &amp; Kitchen Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Restaurant Service &rarr; hides item from public menu in real-time</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Chef 86's a menu item</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Events -->
+  <div class="section">
+    <div class="section-title">Payment &amp; Loyalty Events</div>
+    <div class="event-grid-3">
+      <div class="event-card">
+        <span class="ev-name">payment.succeeded</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Payment Service (Stripe webhook handler)</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; email receipt; Payment &rarr; calculate and credit loyalty points</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Stripe payment_intent.succeeded webhook received</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">payment.failed</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Payment Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; email customer with retry link</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Stripe payment failure webhook received</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">payment.cash.recorded</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Payment Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; send receipt email; Reservation &rarr; release table to AVAILABLE</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Cashier marks invoice paid in POS</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">invoice.generated</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Payment Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; email invoice to customer + push to CashierHub</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Invoice created after order.ready event</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">bonus.earned</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Payment Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; in-app push via NotifyHub "You earned X points!"</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Points credited after successful payment</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">bonus.redeemed</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Payment Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; in-app confirmation of successful redemption</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Customer redeems points for a bonus food item</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delivery Events -->
+  <div class="section">
+    <div class="section-title">Delivery Events</div>
+    <div class="event-grid">
+      <div class="event-card">
+        <span class="ev-name">delivery.broadcast</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Delivery Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; push + SMS to all online couriers via CourierHub</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">New delivery order ready for pickup at restaurant</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">delivery.assigned</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Delivery Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; push to customer with courier name + phone</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Courier accepts delivery (Redis lock acquired successfully)</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">delivery.checkpoint</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Delivery Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Notification &rarr; push to customer "Your order is nearby"</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Courier submits a GPS checkpoint update</span></div>
+      </div>
+      <div class="event-card">
+        <span class="ev-name">delivery.confirmed</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Delivery Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Payment &rarr; release balance hold; Notification &rarr; send courier review prompt</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Customer confirms receipt (or auto-confirm after 2h)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Review Events -->
+  <div class="section">
+    <div class="section-title">Review Events</div>
+    <div class="event-grid" style="grid-template-columns: 1fr;">
+      <div class="event-card">
+        <span class="ev-name">review.submitted</span>
+        <div class="ev-row"><span class="ev-key">Producer</span><span class="ev-val">Notification &amp; Review Service</span></div>
+        <div class="ev-row"><span class="ev-key">Consumers</span><span class="ev-val">Restaurant Service &rarr; recalculate and update aggregated ratings (chef avg, waiter avg, cleanliness, overall)</span></div>
+        <div class="ev-row"><span class="ev-key">Trigger</span><span class="ev-val">Admin publishes a customer review after moderation</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Payload Contract -->
+  <div class="section">
+    <div class="section-title">Event Payload Contract</div>
+    <div class="explanation">
+      All events use JSON. The payload structure is defined as C# record classes in a shared contracts NuGet package. Every event written to the <strong>outbox_events</strong> table follows this standard envelope.
+    </div>
+    <div class="flow-box">
+      <pre>
+{
+  "aggregate_type": "Order",
+  "aggregate_id": "550e8400-e29b-41d4-a716-446655440000",
+  "event_type": "order.placed",
+  "payload": {
+    "orderId": "550e8400-e29b-41d4-a716-446655440000",
+    "customerId": "...",
+    "restaurantId": "...",
+    "tableId": "...",
+    "type": "DINE_IN",
+    "totalAmount": 87.50,
+    "createdAt": "2026-03-06T14:30:00Z"
+  }
+}
+      </pre>
+    </div>
+    <div class="explanation">
+      <strong>Partition Key Strategy:</strong> All events use the <strong>aggregate_id</strong> as the Kafka partition key. This guarantees that all events for the same entity (e.g., the same order) are processed in order.
+    </div>
+  </div>
+
+  <!-- Dead Letter Topics -->
+  <div class="section">
+    <div class="section-title">Dead Letter Topics</div>
+    <div class="explanation">
+      When a consumer fails to process a message after <strong>3 retry attempts</strong> (with 1-second backoff), the message is published to the corresponding DLT. DLT messages retain the original headers (including trace ID) for debugging.
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Original Topic</th><th>&rarr;</th><th>Dead Letter Topic</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">order.placed</td><td>&rarr;</td><td class="mono">order.placed.DLT</td></tr>
+        <tr><td class="mono">payment.succeeded</td><td>&rarr;</td><td class="mono">payment.succeeded.DLT</td></tr>
+        <tr><td class="mono">delivery.confirmed</td><td>&rarr;</td><td class="mono">delivery.confirmed.DLT</td></tr>
+        <tr><td class="mono"><em>(all topics)</em></td><td>&rarr;</td><td class="mono">{topic-name}.DLT</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Consumer Groups -->
+  <div class="section">
+    <div class="section-title">Consumer Groups</div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Consumer Group</th><th>Service</th><th>Topics Consumed</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">reservation-service</td><td>Reservation</td><td class="desc">payment.cash.recorded (release table); reservation.seated (push pre-orders)</td></tr>
+        <tr><td class="mono">order-kitchen-service</td><td>Order &amp; Kitchen</td><td class="desc">reservation.seated (activate pre-orders in kitchen queue)</td></tr>
+        <tr><td class="mono">payment-service</td><td>Payment &amp; Loyalty</td><td class="desc">order.ready (generate invoice); order.cancelled (cancel invoice); reservation.no_show (apply fee); delivery.confirmed (release hold)</td></tr>
+        <tr><td class="mono">delivery-service</td><td>Delivery</td><td class="desc">order.ready type=DELIVERY (trigger courier broadcast)</td></tr>
+        <tr><td class="mono">restaurant-service</td><td>Restaurant</td><td class="desc">review.submitted (update aggregated ratings); menu.item.unavailable (hide from public menu)</td></tr>
+        <tr><td class="mono">notification-email</td><td>Notification</td><td class="desc">ALL topics &rarr; email dispatch via SendGrid</td></tr>
+        <tr><td class="mono">notification-sms</td><td>Notification</td><td class="desc">reservation.confirmed, reservation.reminder, delivery.assigned, delivery.checkpoint &rarr; SMS via Twilio</td></tr>
+        <tr><td class="mono">notification-push</td><td>Notification</td><td class="desc">ALL topics &rarr; in-app push via SignalR NotifyHub + FCM for mobile</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+</body>
+</html>

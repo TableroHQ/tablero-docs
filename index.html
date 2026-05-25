@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — Architecture Documentation</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html" class="active">Overview</a>
+  <a href="c4.html">C4 Architecture</a>
+  <a href="services.html">Services</a>
+  <a href="roles.html">Roles &amp; Flows</a>
+  <a href="database.html">Database</a>
+  <a href="api.html">API</a>
+  <a href="events.html">Kafka Events</a>
+</nav>
+
+<div class="site-header">
+  <span class="tag">ARCHITECTURE DOCUMENTATION</span>
+  <h1>Tablero — <span>Restaurant</span> Operating System</h1>
+  <p>A full-stack platform connecting every actor in the restaurant lifecycle — from QR menus and table reservations to real-time kitchen displays, delivery tracking, loyalty rewards, and cashier POS. The current repository includes six .NET 10 / ASP.NET Core Web API services plus the YARP API Gateway, SharedKernel, and Contracts projects. The final planned architecture adds Delivery as a dedicated service, with database-per-service isolation and Kafka-ready outbox events.</p>
+</div>
+
+<div class="page-content">
+
+  <!-- Vision -->
+  <div class="section">
+    <div class="section-title">Vision</div>
+    <div class="explanation">
+      <strong>What you're building</strong> is not a reservation app — it's a full Restaurant Operating System. It ties together every participant in a restaurant in real time: guests browsing before arrival, customers ordering from the table, chefs watching a live kitchen queue, waiters managing service from their phones, cashiers processing payments, couriers delivering food, and directors running multi-branch operations. This is <strong>Square + OpenTable + Uber Eats + a loyalty program</strong> — unified under one coherent platform.
+    </div>
+    <div class="info-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="info-box">
+        <h4>CORE PROBLEM</h4>
+        <p>No single system ties together reservations, in-restaurant ordering, kitchen workflow, payments, delivery, and customer loyalty. Tablero solves this in one platform.</p>
+      </div>
+      <div class="info-box">
+        <h4>KEY DIFFERENTIATOR</h4>
+        <p><strong>Food-item bonuses</strong> — not just points. Earning a real hotdog or burger from spending makes loyalty feel on-brand and memorable for a food platform.</p>
+      </div>
+      <div class="info-box">
+        <h4>TECHNICAL CHALLENGE</h4>
+        <p>Chef &harr; Waiter &harr; Customer synchronization requires <strong>SignalR hubs</strong> on top of Kafka events. Kitchen printer integration adds IoT-layer complexity.</p>
+      </div>
+      <div class="info-box">
+        <h4>BUSINESS MODEL</h4>
+        <p>Restaurants subscribe per branch. All data is scoped by <code>restaurant_id</code>. Multi-branch support allows the platform to scale across chains without re-architecture.</p>
+      </div>
+      <div class="info-box">
+        <h4>COMPLIANCE</h4>
+        <p>Card payments delegated entirely to Stripe (PCI-DSS). Customer profiles and review data require GDPR-compliant data handling and deletion flows.</p>
+      </div>
+      <div class="info-box">
+        <h4>SCOPE ASSESSMENT</h4>
+        <p>Recommended 3-phase delivery: <strong>Auth + Menu</strong> &rarr; <strong>Orders + Kitchen + Payments</strong> &rarr; <strong>Delivery + Loyalty + Reviews</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="section">
+    <div class="section-title">Architecture</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>STYLE</h4>
+        <p>Current implementation: IdentityService, RestaurantService, ReservationService, OrderService, PaymentService, NotificationService, ApiGateway, SharedKernel, and Contracts. Final planned architecture adds DeliveryService as a separate microservice. No shared database access.</p>
+      </div>
+      <div class="info-box">
+        <h4>COMMUNICATION</h4>
+        <p><strong>Async:</strong> Kafka via Transactional Outbox + Outbox publisher<br><strong>Sync:</strong> REST/HTTP via Refit + Polly circuit breakers<br><strong>Real-time:</strong> SignalR (planned) (6 hubs)</p>
+      </div>
+      <div class="info-box">
+        <h4>AUTH</h4>
+        <p>Gateway-centralized JWT. Token validated once at YARP Reverse Proxy, user identity forwarded as trusted headers (X-User-Id, X-User-Role, X-User-Email, X-Restaurant-Id) to downstream services.</p>
+      </div>
+      <div class="info-box">
+        <h4>INFRASTRUCTURE</h4>
+        <ul>
+          <li>YARP Reverse Proxy (API Gateway + JWT validation)</li>
+          <li>Service discovery (planned)</li>
+          <li>Apache Kafka + Outbox workers (Messaging)</li>
+          <li>OpenTelemetry + Grafana Tempo + Loki (Observability)</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>DATA &amp; INTEGRATIONS</h4>
+        <ul>
+          <li>PostgreSQL (one per service)</li>
+          <li>Redis (planned: distributed locks, OTP cache, rate limiting)</li>
+          <li>Stripe (Checkout + Webhooks)</li>
+          <li>SendGrid (email) + Twilio (SMS)</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>OBSERVABILITY</h4>
+        <ul>
+          <li>OpenTelemetry (instrumentation)</li>
+          <li>Grafana Tempo (distributed traces)</li>
+          <li>Grafana Loki + Promtail (log aggregation)</li>
+          <li>Grafana (unified dashboards)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Services -->
+  <div class="section">
+    <div class="section-title">Services</div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+      <table class="data-table">
+        <thead>
+          <tr><th>Service</th><th>Port</th><th>Database</th><th>Responsibilities</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Identity Service</strong></td><td class="mono">5001</td><td class="mono">identity_db</td><td class="desc">Register/login by email or username, JWT (15 min) + refresh tokens (7 days), role management, profile updates, password reset via OTP</td></tr>
+          <tr><td><strong>Restaurant Service</strong></td><td class="mono">5002</td><td class="mono">restaurant_db</td><td class="desc">Restaurant info, photo gallery, operating hours, QR code generation, public menu cache (no auth), aggregated ratings denormalization</td></tr>
+          <tr><td><strong>Reservation Service</strong></td><td class="mono">5003</td><td class="mono">reservation_db</td><td class="desc">Table layout, time slot availability (Redis distributed locks), booking lifecycle PENDING&rarr;CONFIRMED&rarr;SEATED&rarr;COMPLETED, pre-order with reservation</td></tr>
+          <tr><td><strong>Order &amp; Kitchen Service</strong></td><td class="mono">5004</td><td class="mono">order_db</td><td class="desc">Canonical menu CRUD, order placement, kitchen display (SignalR), item status lifecycle QUEUED&rarr;PREPARING&rarr;READY, waiter call system, printer webhook</td></tr>
+          <tr><td><strong>Payment &amp; Loyalty Service</strong></td><td class="mono">5005</td><td class="mono">payment_db</td><td class="desc">Invoices, Stripe checkout, cash via cashier POS, bill splitting, account balance (delivery pre-pay holds), loyalty points + food-item bonus catalogue</td></tr>
+          <tr><td><strong>Delivery Service</strong></td><td class="mono">5006</td><td class="mono">delivery_db</td><td class="desc">Delivery order lifecycle, courier availability toggle, first-come assignment (Redis lock), GPS checkpoint tracking, auto-confirm after 2h, courier ratings</td></tr>
+          <tr><td><strong>Notification &amp; Review Service</strong></td><td class="mono">5007</td><td class="mono">notify_db</td><td class="desc">Email via SendGrid, SMS via Twilio, in-app push via SignalR + FCM, review submission and moderation, aggregated rating recalculation</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="explanation" style="margin-top:16px;">
+      <strong>Infrastructure:</strong> YARP Reverse Proxy (Gateway :5000), Consul Service Discovery (:8500), Apache Kafka + Outbox workers Transactional Outbox, Redis 7 (locks + rate limiting + OTP cache), SignalR Hubs (6 hubs), OpenTelemetry + Grafana Tempo + Loki, Docker Compose.
+    </div>
+  </div>
+
+  <!-- User Roles -->
+  <div class="section">
+    <div class="section-title">User Roles</div>
+    <div class="card-grid" style="grid-template-columns: repeat(4, 1fr);">
+      <div class="card" style="border-top:3px solid var(--identity-border);">
+        <span class="card-tag">UNAUTHENTICATED</span>
+        <h3>Guest</h3>
+        <p>View restaurant info, menu, photos, and ratings. Scan QR code. No ordering, reservations, or interaction.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--restaurant-border);">
+        <span class="card-tag">CUSTOMER</span>
+        <h3>User</h3>
+        <p>Reserve tables, pre-order, order at table, pay via app, earn bonus items, place delivery orders, write reviews.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--payment-border);">
+        <span class="card-tag">STAFF</span>
+        <h3>Waiter</h3>
+        <p>Submit orders on behalf of customers, manage assigned tables, present bills, receive kitchen pickup alerts.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--order-border);">
+        <span class="card-tag">STAFF</span>
+        <h3>Chef</h3>
+        <p>Kitchen display screen. Receive orders with audio + visual alerts. Update item status. Call waiter for delivery.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--notify-border);">
+        <span class="card-tag">STAFF</span>
+        <h3>Cashier</h3>
+        <p>Dedicated POS app. Process cash payments, release tables, view bill queue and payment status.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--delivery-border);">
+        <span class="card-tag">STAFF</span>
+        <h3>Courier</h3>
+        <p>Receive delivery broadcasts, accept orders (first-come), add GPS checkpoints, confirm delivery.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--reservation-border);">
+        <span class="card-tag">MANAGEMENT</span>
+        <h3>Admin</h3>
+        <p>Manage staff, menus, tables, time slots, promotions, view analytics, approve reviews, handle complaints.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--accent);">
+        <span class="card-tag">MANAGEMENT</span>
+        <h3>Director</h3>
+        <p>Full platform access. Multi-restaurant management. Revenue reports. Loyalty program configuration.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Features -->
+  <div class="section">
+    <div class="section-title">Key Features</div>
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>AUTHENTICATION</h4>
+        <ul>
+          <li>Login by <strong>email OR username</strong> — single field, auto-detect by presence of "@"</li>
+          <li>JWT access token <strong>(15 min)</strong> + refresh token <strong>(7 days)</strong> with rotation</li>
+          <li>Password reset via email OTP — 6-digit code, <strong>Redis TTL 10 min</strong>, single-use</li>
+          <li>Roles encoded in JWT claims alongside <code>userId</code>, <code>restaurantId</code></li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>LOYALTY SYSTEM</h4>
+        <ul>
+          <li>Points earned per currency unit spent — rate configurable by Director</li>
+          <li>Bonus catalogue: food items (Hotdog = 50pts, Burger = 120pts) — configured per restaurant</li>
+          <li>Redemption creates a <strong>zero-price line item</strong> on the next invoice</li>
+          <li>Points stored in <code>user_balances.loyalty_points</code></li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>KITCHEN DISPLAY SYSTEM</h4>
+        <ul>
+          <li>Chef screen — live order queue via <code>KitchenHub</code> SignalR</li>
+          <li>New order triggers <strong>audio chime + animated card</strong></li>
+          <li>Item lifecycle: QUEUED &rarr; PREPARING &rarr; READY</li>
+          <li>Chef calls specific waiter &rarr; <code>WaiterHub</code> push notification</li>
+          <li>Optional kitchen printer webhook — ZPL/ESC-POS JSON payload</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>DELIVERY SYSTEM</h4>
+        <ul>
+          <li>100% balance pre-payment — held (not deducted) until delivery confirmed</li>
+          <li>Broadcast to all online couriers via SignalR + Twilio SMS</li>
+          <li>First-accept assignment via Redis lock <code>delivery:{id}:accept</code> TTL 5 sec</li>
+          <li>GPS checkpoints — lat/lng + timestamp visible to customer</li>
+          <li>Auto-confirm + balance deduction after 2h if no customer action</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>QR CODE ORDERING</h4>
+        <ul>
+          <li>QR encodes <code>restaurantId + tableId</code> — unique per table</li>
+          <li>Public menu accessible without login (configured at YARP level)</li>
+          <li>Authenticated scan auto-assigns user to table session</li>
+          <li>QR codes generated as PNG/SVG via QRCoder NuGet</li>
+        </ul>
+      </div>
+      <div class="info-box">
+        <h4>PAYMENT FLOWS</h4>
+        <ul>
+          <li>App payment: Stripe Checkout <strong>or</strong> account balance</li>
+          <li>Cash: customer &rarr; waiter &rarr; cashier marks paid in POS &rarr; <code>CashierHub</code> notifies</li>
+          <li>Split bill: multiple customers per table, each pays their share</li>
+          <li>Receipt emailed automatically via SendGrid after payment event</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Documentation Links -->
+  <div class="section">
+    <div class="section-title">Documentation</div>
+    <div class="card-grid" style="grid-template-columns: repeat(5, 1fr);">
+      <a href="services.html" class="card" style="text-decoration:none; border-top:3px solid var(--accent);">
+        <span class="card-tag">MICROSERVICES</span>
+        <h3 style="color:var(--text);">Service Breakdown</h3>
+        <p>Current and planned services — responsibilities, technical notes, SignalR hubs</p>
+      </a>
+      <a href="roles.html" class="card" style="text-decoration:none; border-top:3px solid var(--reservation-border);">
+        <span class="card-tag">ROLES &amp; FLOWS</span>
+        <h3 style="color:var(--text);">User Journeys</h3>
+        <p>8 roles, permission matrix, 5 end-to-end flows</p>
+      </a>
+      <a href="database.html" class="card" style="text-decoration:none; border-top:3px solid var(--delivery-border);">
+        <span class="card-tag">DATABASE</span>
+        <h3 style="color:var(--text);">Database Architecture</h3>
+        <p>Current and planned databases, table schemas, cross-service references</p>
+      </a>
+      <a href="api.html" class="card" style="text-decoration:none; border-top:3px solid var(--restaurant-border);">
+        <span class="card-tag">REST API</span>
+        <h3 style="color:var(--text);">API Reference</h3>
+        <p>~85 REST endpoints grouped by service and role</p>
+      </a>
+      <a href="events.html" class="card" style="text-decoration:none; border-top:3px solid var(--payment-border);">
+        <span class="card-tag">EVENTS</span>
+        <h3 style="color:var(--text);">Kafka Events</h3>
+        <p>Event catalog, payload contracts, consumer groups, DLT</p>
+      </a>
+    </div>
+  </div>
+
+  <!-- Implementation Phases -->
+  <div class="section">
+    <div class="section-title">Implementation Phases</div>
+    <div class="card-grid" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="card" style="border-left:4px solid var(--accent);">
+        <span class="card-tag">PHASE 1 — FOUNDATION</span>
+        <h3>Auth + Public Info</h3>
+        <p>Identity Service (register / login / profile), Restaurant Service (public menu, photos, QR code), YARP gateway with JWT, Docker Compose environment.</p>
+      </div>
+      <div class="card" style="border-left:4px solid var(--reservation-border);">
+        <span class="card-tag">PHASE 2 — CORE OPERATIONS</span>
+        <h3>Reservations + Orders + Payments</h3>
+        <p>Reservation Service (table booking, pre-order, Redis locks), Order &amp; Kitchen Service (KDS SignalR, printer webhook), Payment Service (Stripe, cashier POS).</p>
+      </div>
+      <div class="card" style="border-left:4px solid var(--delivery-border);">
+        <span class="card-tag">PHASE 3 — LOYALTY &amp; DELIVERY</span>
+        <h3>Delivery + Loyalty + Reviews</h3>
+        <p>Delivery Service (courier workflow, GPS), Loyalty bonus system, Notification Service (SMS / email / push), Review system with moderation and aggregated ratings.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tech Stack -->
+  <div class="section">
+    <div class="section-title">Tech Stack</div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+      <table class="data-table">
+        <thead>
+          <tr><th>Layer</th><th>Technology</th><th>Rationale</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Language</td><td>.NET 10 / C#</td><td class="desc">Performance, strong typing, best-in-class ASP.NET Core ecosystem</td></tr>
+          <tr><td>API Framework</td><td>.NET 10 / ASP.NET Core (Minimal + Controllers)</td><td class="desc">Flexible routing, fast startup, excellent middleware pipeline</td></tr>
+          <tr><td>ORM</td><td>EF Core 10 + Dapper</td><td class="desc">EF Core for writes and migrations; Dapper for complex read queries</td></tr>
+          <tr><td>Database</td><td>PostgreSQL (one per service)</td><td class="desc">Database-per-service isolation, JSONB support, UUIDs as PKs</td></tr>
+          <tr><td>Messaging</td><td>Apache Kafka 4, Outbox publisher</td><td class="desc">Transactional Outbox, consumer groups, DLT support, retry policies</td></tr>
+          <tr><td>Real-time</td><td>SignalR (planned)</td><td class="desc">WebSocket hubs for KDS, waiter alerts, delivery tracking, cashier POS</td></tr>
+          <tr><td>Cache / Locks</td><td>Redis 7 + StackExchange.Redis</td><td class="desc">Distributed locks, OTP cache, rate limiting</td></tr>
+          <tr><td>API Gateway</td><td>YARP Reverse Proxy</td><td class="desc">JWT validation at gateway; injects X-User-Id / X-User-Role headers</td></tr>
+          <tr><td>Auth</td><td>ASP.NET Core Identity + JWT Bearer</td><td class="desc">PBKDF2 password hashing, role-based access control, refresh token rotation</td></tr>
+          <tr><td>Payments</td><td>Stripe.net SDK</td><td class="desc">PCI-compliant card processing, Stripe Checkout, webhooks, refunds</td></tr>
+          <tr><td>Email</td><td>SendGrid SDK</td><td class="desc">Transactional email: receipts, OTPs, reminders, promotional blasts</td></tr>
+          <tr><td>SMS</td><td>Twilio SDK</td><td class="desc">Delivery alerts, reservation reminders, courier broadcast</td></tr>
+          <tr><td>Resilience</td><td>Polly + Refit</td><td class="desc">Circuit breakers, retries on synchronous HTTP calls between services</td></tr>
+          <tr><td>QR Codes</td><td>QRCoder NuGet</td><td class="desc">Generates table QR codes as PNG or SVG</td></tr>
+          <tr><td>Observability</td><td>OpenTelemetry + Grafana Tempo + Loki</td><td class="desc">Distributed traces with X-Correlation-Id; structured log aggregation</td></tr>
+          <tr><td>Containers</td><td>Docker + Docker Compose</td><td class="desc">Local dev environment; Kubernetes-ready for production</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Architectural Decisions -->
+  <div class="section">
+    <div class="section-title">Key Architectural Decisions</div>
+    <div class="explanation">
+      <strong>Login field auto-detection:</strong> Single input — if value contains "@", route to email lookup; otherwise username lookup. Both map to the same user record in <code>users</code> table.<br><br>
+      <strong>Delivery pre-payment hold:</strong> Balance is <em>held</em> (not transferred) at order placement. Converted to deduction when customer confirms receipt. Auto-released after 2h if unconfirmed. Refunded if cancelled before kitchen pickup.<br><br>
+      <strong>Kitchen printer as webhook:</strong> Order Service POSTs to a configurable endpoint on <code>order.placed</code>. Optional per restaurant, ZPL or ESC-POS JSON payload.<br><br>
+      <strong>Cashier as distinct role:</strong> Cashier gets a minimal dedicated POS app — only sees open tables, bills pending payment, cash marking, and table release. No kitchen, menu management, or reporting access.<br><br>
+      <strong>Multi-restaurant scoping:</strong> Every entity is scoped by <code>restaurant_id</code>. A Director account owns multiple restaurant branches. Admin is scoped to one branch.
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

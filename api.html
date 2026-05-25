@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — API Reference</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html">Overview</a>
+  <a href="c4.html">C4 Architecture</a>
+  <a href="services.html">Services</a>
+  <a href="roles.html">Roles &amp; Flows</a>
+  <a href="database.html">Database</a>
+  <a href="api.html" class="active">API</a>
+  <a href="events.html">Kafka Events</a>
+</nav>
+
+<div class="site-header">
+  <span class="tag">REST API</span>
+  <h1>API <span>Reference</span></h1>
+  <p>All REST endpoints grouped by service. JWT Bearer required on all endpoints unless marked Public. Identity is validated once at the YARP API Gateway and forwarded as headers (<code>X-User-Id</code>, <code>X-User-Role</code>, <code>X-User-Email</code>, <code>X-Restaurant-Id</code>) to downstream services.</p>
+</div>
+
+<div class="page-content">
+
+  <!-- Identity -->
+  <div class="section">
+    <div class="section-title">Identity Service</div>
+    <table class="data-table">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/register</td><td class="access">Public</td><td class="desc">Register with email, username, password, name</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/login</td><td class="access">Public</td><td class="desc">Login by email OR username (auto-detect). Returns JWT + refresh token</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/refresh</td><td class="access">Public</td><td class="desc">Exchange refresh token for new JWT pair — rotates refresh token</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/logout</td><td class="access">Authenticated</td><td class="desc">Revoke current refresh token</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/forgot-password</td><td class="access">Public</td><td class="desc">Send 6-digit OTP to email — valid 10 min, single use</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/auth/reset-password</td><td class="access">Public</td><td class="desc">Verify OTP and set new password</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/users/me</td><td class="access">Authenticated</td><td class="desc">Get own profile — name, email, username, avatar, role, loyalty points</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/users/me</td><td class="access">Authenticated</td><td class="desc">Update name, phone, username, avatar</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/users</td><td class="access">Admin &middot; Director</td><td class="desc">List staff users — paginated, filterable by role / restaurant</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/users/staff</td><td class="access">Admin &middot; Director</td><td class="desc">Create waiter / chef / cashier / courier account for a restaurant</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/users/{id}/role</td><td class="access">Admin &middot; Director</td><td class="desc">Change user role</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/users/{id}/status</td><td class="access">Admin &middot; Director</td><td class="desc">Activate or suspend user account</td></tr>
+        <tr><td><span class="method method-delete">DEL</span></td><td class="endpoint">/users/{id}</td><td class="access">Director</td><td class="desc">Soft-delete user account</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Restaurant -->
+  <div class="section">
+    <div class="section-title">Restaurant Service</div>
+    <table class="data-table">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/{id}</td><td class="access">Public</td><td class="desc">Get restaurant info, address, hours, ratings summary</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/{id}/menu</td><td class="access">Public</td><td class="desc">Get public menu — categories and items, no auth required</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/{id}/photos</td><td class="access">Public</td><td class="desc">Get photo gallery</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/{id}/ratings</td><td class="access">Public</td><td class="desc">Get aggregated ratings: chef avg, waiter avg, cleanliness, overall</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/{id}/reviews</td><td class="access">Public</td><td class="desc">List published reviews — paginated</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/tables/{tableId}/qr</td><td class="access">Public</td><td class="desc">Get QR code for table as PNG or SVG</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/</td><td class="access">Director</td><td class="desc">Create new restaurant branch</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}</td><td class="access">Admin &middot; Director</td><td class="desc">Update restaurant info, hours, address</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/{id}/photos</td><td class="access">Admin &middot; Director</td><td class="desc">Upload photo to gallery</td></tr>
+        <tr><td><span class="method method-delete">DEL</span></td><td class="endpoint">/{id}/photos/{photoId}</td><td class="access">Admin &middot; Director</td><td class="desc">Remove photo from gallery</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Reservation -->
+  <div class="section">
+    <div class="section-title">Reservation Service</div>
+    <table class="data-table">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/availability</td><td class="access">Public</td><td class="desc">Check available slots for date + party size</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/</td><td class="access">User</td><td class="desc">Create reservation with optional pre-order items</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/my</td><td class="access">User</td><td class="desc">Get own reservations — upcoming and history</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/{id}</td><td class="access">Authenticated</td><td class="desc">Get reservation detail</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/cancel</td><td class="access">User &middot; Admin</td><td class="desc">Cancel reservation</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/today</td><td class="access">Admin &middot; Waiter</td><td class="desc">All reservations for today with table and customer info</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/confirm</td><td class="access">Admin &middot; Waiter</td><td class="desc">Confirm reservation — PENDING &rarr; CONFIRMED</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/seat</td><td class="access">Waiter</td><td class="desc">Mark guests as seated — triggers pre-order push to kitchen queue</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/complete</td><td class="access">Waiter</td><td class="desc">Mark reservation completed</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/no-show</td><td class="access">Waiter &middot; Admin</td><td class="desc">Mark as no-show — triggers potential no-show fee</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/tables</td><td class="access">Admin &middot; Waiter &middot; Cashier</td><td class="desc">All tables with live statuses</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/tables</td><td class="access">Admin &middot; Director</td><td class="desc">Add new table to restaurant layout</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/tables/{id}</td><td class="access">Admin &middot; Director</td><td class="desc">Update table configuration or status</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/tables/{id}/qr/regenerate</td><td class="access">Admin</td><td class="desc">Regenerate QR code for table</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Order & Kitchen -->
+  <div class="section">
+    <div class="section-title">Order &amp; Kitchen Service</div>
+    <table class="data-table">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/menu/categories</td><td class="access">Public</td><td class="desc">List menu categories</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/menu/categories</td><td class="access">Admin &middot; Director</td><td class="desc">Create menu category</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/menu/items</td><td class="access">Public</td><td class="desc">List menu items — filterable by category or available-only</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/menu/items</td><td class="access">Admin &middot; Director</td><td class="desc">Create menu item</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/menu/items/{id}</td><td class="access">Admin &middot; Chef</td><td class="desc">Update item price, availability, description</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/menu/items/{id}/86</td><td class="access">Chef &middot; Admin</td><td class="desc">Mark item unavailable (86'd) — event propagated to public menu</td></tr>
+        <tr><td><span class="method method-delete">DEL</span></td><td class="endpoint">/menu/items/{id}</td><td class="access">Admin &middot; Director</td><td class="desc">Soft-delete menu item</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/</td><td class="access">User &middot; Waiter</td><td class="desc">Place order — type: DINE_IN or DELIVERY</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/my</td><td class="access">User</td><td class="desc">Customer's own order history</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/table/{tableId}</td><td class="access">Waiter &middot; Cashier</td><td class="desc">All orders for a table session</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/add-items</td><td class="access">User &middot; Waiter</td><td class="desc">Add items to existing open order</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/cancel</td><td class="access">User &middot; Waiter &middot; Admin</td><td class="desc">Cancel order — only before IN_KITCHEN status</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/kitchen/queue</td><td class="access">Chef</td><td class="desc">Live kitchen queue — active orders with item statuses</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/kitchen/items/{itemId}/status</td><td class="access">Chef</td><td class="desc">Update item kitchen status — PREPARING or READY</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/kitchen/call-waiter</td><td class="access">Chef</td><td class="desc">Call specific waiter for order pickup — sends SignalR + push</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/{id}/serve</td><td class="access">Waiter</td><td class="desc">Mark order as SERVED — triggers customer TableHub notification</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Payment & Loyalty -->
+  <div class="section">
+    <div class="section-title">Payment &amp; Loyalty Service</div>
+    <table class="data-table">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/balance</td><td class="access">User</td><td class="desc">Get account balance + held balance + loyalty points</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/balance/topup</td><td class="access">User</td><td class="desc">Top up balance via Stripe Checkout</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/invoices/{id}</td><td class="access">Authenticated</td><td class="desc">Get invoice detail with line items</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/invoices/{id}/pay</td><td class="access">User</td><td class="desc">Pay invoice via card (Stripe) or account balance</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/invoices/{id}/split</td><td class="access">Waiter &middot; User</td><td class="desc">Split bill across multiple customers at same table</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/cashier/pay-cash</td><td class="access">Cashier</td><td class="desc">Mark invoice paid by cash — releases table automatically</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/invoices/{id}/refund</td><td class="access">Admin &middot; Director</td><td class="desc">Initiate refund — Stripe reversal or balance credit</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/webhooks/stripe</td><td class="access">Stripe (no JWT)</td><td class="desc">Receive Stripe webhook events — signature verified</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/loyalty/catalogue</td><td class="access">User</td><td class="desc">Get bonus item catalogue with point costs and availability</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/loyalty/redeem</td><td class="access">User</td><td class="desc">Redeem points for bonus item — adds $0.00 line item to next invoice</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/loyalty/catalogue</td><td class="access">Director</td><td class="desc">Add item to bonus catalogue with point cost and expiry</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/loyalty/config</td><td class="access">Director</td><td class="desc">Configure points rate per currency unit spent</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/reports/revenue</td><td class="access">Admin &middot; Director</td><td class="desc">Revenue report by date range and payment method</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Delivery -->
+  <div class="section">
+    <div class="section-title">Delivery Service</div>
+    <table class="data-table">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/</td><td class="access">User</td><td class="desc">Place delivery order — checks and holds balance, pushes to kitchen queue</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/my</td><td class="access">User</td><td class="desc">Own delivery history + live status</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/{id}/track</td><td class="access">User</td><td class="desc">Live tracking — current GPS checkpoint + courier name and phone</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/{id}/confirm-receipt</td><td class="access">User</td><td class="desc">Confirm food received — releases balance hold to restaurant</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/{id}/rate-courier</td><td class="access">User</td><td class="desc">Rate courier 1&ndash;5 stars + optional comment</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/courier/status</td><td class="access">Courier</td><td class="desc">Set ONLINE or OFFLINE availability</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/{id}/accept</td><td class="access">Courier</td><td class="desc">Accept delivery — first-come via Redis lock</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/{id}/checkpoint</td><td class="access">Courier</td><td class="desc">Add GPS checkpoint — lat, lng, timestamp, status label</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/{id}/delivered</td><td class="access">Courier</td><td class="desc">Mark as delivered — triggers customer confirmation prompt</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/courier/history</td><td class="access">Courier</td><td class="desc">Own delivery history + average rating</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Notification & Review -->
+  <div class="section">
+    <div class="section-title">Notification &amp; Review Service</div>
+    <table class="data-table">
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/notifications</td><td class="access">Authenticated</td><td class="desc">Get own notifications — unread first, paginated</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/notifications/{id}/read</td><td class="access">Authenticated</td><td class="desc">Mark single notification as read</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/notifications/read-all</td><td class="access">Authenticated</td><td class="desc">Mark all notifications as read</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/notifications/preferences</td><td class="access">User</td><td class="desc">Update preferences — opt-out of SMS or email per category</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/reviews</td><td class="access">User</td><td class="desc">Submit review — only after COMPLETED reservation or confirmed delivery</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td class="endpoint">/reviews</td><td class="access">Public</td><td class="desc">List published reviews for a restaurant — paginated</td></tr>
+        <tr><td><span class="method method-patch">PATCH</span></td><td class="endpoint">/reviews/{id}/publish</td><td class="access">Admin</td><td class="desc">Approve and publish review — triggers ratings recalculation</td></tr>
+        <tr><td><span class="method method-delete">DEL</span></td><td class="endpoint">/reviews/{id}</td><td class="access">Admin &middot; Director</td><td class="desc">Remove inappropriate review</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td class="endpoint">/promotions/send</td><td class="access">Admin &middot; Director</td><td class="desc">Send promotional email or SMS blast to subscribed customers</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+</body>
+</html>

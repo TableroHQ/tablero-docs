@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero — Roles & Flows</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a href="index.html">Overview</a>
+  <a href="c4.html">C4 Architecture</a>
+  <a href="services.html">Services</a>
+  <a href="roles.html" class="active">Roles &amp; Flows</a>
+  <a href="database.html">Database</a>
+  <a href="api.html">API</a>
+  <a href="events.html">Kafka Events</a>
+</nav>
+
+<div class="site-header">
+  <span class="tag">USER JOURNEYS</span>
+  <h1>Roles &amp; <span>Flows</span></h1>
+  <p>Every role's permissions and capabilities, and the end-to-end flows that connect them — from a guest browsing the menu to a chef printing a kitchen ticket, a cashier releasing a table, and a courier completing a delivery.</p>
+</div>
+
+<div class="page-content">
+
+  <!-- Permission Matrix -->
+  <div class="section">
+    <div class="section-title">Role Permission Matrix</div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:12px; overflow:hidden; overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="min-width:220px">Capability</th>
+            <th>Guest</th>
+            <th>User</th>
+            <th>Waiter</th>
+            <th>Chef</th>
+            <th>Cashier</th>
+            <th>Courier</th>
+            <th>Admin</th>
+            <th>Director</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>View menu / photos / ratings</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td></tr>
+          <tr><td>Scan QR code for menu</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Register / login</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td></tr>
+          <tr><td>Update own profile</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td></tr>
+          <tr><td>Make reservation</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-partial">&#10003; on behalf</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Pre-order with reservation</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Order food at table</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Place delivery order</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Pay via app (Stripe / balance)</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Earn / redeem bonus items</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Write restaurant review</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Submit orders for tables</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Mark table seated / served</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>View kitchen queue (KDS)</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Update item kitchen status</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Call waiter for order pickup</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Mark item unavailable (86)</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Process cash payment (POS)</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Release table after payment</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Accept delivery orders</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Add GPS delivery checkpoints</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td></tr>
+          <tr><td>Manage menu / tables / staff</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td></tr>
+          <tr><td>View analytics / revenue</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td><td class="perm-yes">&#10003;</td></tr>
+          <tr><td>Configure loyalty program</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td></tr>
+          <tr><td>Multi-restaurant management</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-no">&mdash;</td><td class="perm-yes">&#10003;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Flow 1 -->
+  <div class="section">
+    <div class="section-title">Flow 1 &mdash; Customer Dine-In Full Journey</div>
+    <div class="flow-box">
+<pre><span class="actor">[GUEST]</span>   Scans QR code on table &rarr; sees public menu, photos, ratings (no login needed)
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="note">(decides to order &mdash; prompted to register or log in)</span>
+<span class="actor">[USER]</span>    Registers or logs in via email or username
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="note">(optional: reserve in advance)</span>
+<span class="actor">[USER]</span>    Makes reservation: selects date, time slot, party size, table preference
+          Optionally pre-selects menu items (pre-order)
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: reservation.confirmed</span> &rarr; SMS + email reminder scheduled (24h before)
+<span class="arrow">           |</span>
+<span class="actor">[USER]</span>    Arrives, scans QR &rarr; app recognises table, activates table session
+<span class="actor">[WAITER]</span>  Marks reservation as SEATED in their app
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: reservation.seated</span> &rarr; pre-ordered items automatically pushed to kitchen queue
+<span class="actor">[USER]</span>    Can add more items from phone at any time &rarr; Order &amp; Kitchen Service
+<span class="actor">[WAITER]</span>  Can also add items on behalf of customer (for non-app users)
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: order.placed</span> &rarr; KitchenHub pushes new order to chef screen
+<span class="actor">[CHEF]</span>    Sees new order (audio chime + animated card) on KDS or phone
+          Marks items: QUEUED &rarr; PREPARING &rarr; READY
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  When all items READY: <span class="ev">EVENT: order.ready</span> &rarr; WaiterHub notifies assigned waiter
+<span class="actor">[WAITER]</span>  Picks up food, brings to table. Marks order SERVED.
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: order.served</span> &rarr; TableHub pushes "Your order has arrived" to customer app
+<span class="actor">[USER]</span>    Eats. When done, taps "Request Bill" in app.
+<span class="arrow">           |</span>
+          Payment options:
+          A) Pay via app (Stripe card or account balance) &rarr; invoice marked PAID
+          B) Waiter brings physical bill &rarr; customer pays cash to cashier
+             &rarr; Cashier marks paid in POS app &rarr; CashierHub notifies &rarr; table released
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: payment.succeeded</span> &rarr; bonus points calculated + added to account
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: bonus.earned</span> &rarr; in-app notification "You earned X points!"
+<span class="arrow">           |</span>
+<span class="actor">[USER]</span>    Receives review prompt (15 min after payment)
+          Rates: Chef, Waiter, Cleanliness + Comment
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: review.submitted</span> &rarr; Restaurant Service updates aggregated ratings</pre>
+    </div>
+  </div>
+
+  <!-- Flow 2 -->
+  <div class="section">
+    <div class="section-title">Flow 2 &mdash; Delivery Order</div>
+    <div class="flow-box">
+<pre><span class="actor">[USER]</span>    Opens app &rarr; Delivery tab &rarr; selects items from menu &rarr; enters address
+          Sees total (food + delivery fee). Checks account balance &mdash; must cover 100%.
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="note">If balance insufficient &rarr; prompted to top up via Stripe</span>
+<span class="actor">[USER]</span>    Confirms order &rarr; balance HELD (not deducted yet)
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: order.placed (type=DELIVERY)</span> &rarr; kitchen queue (same as dine-in)
+<span class="actor">[CHEF]</span>    Prepares order. Marks all items READY.
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: order.ready</span> &rarr; Delivery Service creates delivery record
+<span class="arrow">           &darr;</span>  Broadcast to all ONLINE couriers via CourierHub (SignalR) + SMS (Twilio)
+<span class="arrow">           |</span>
+<span class="actor">[COURIER]</span> First courier to tap "Accept" gets assigned (Redis lock prevents double-accept)
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: delivery.assigned</span> &rarr; customer notified with courier name + phone
+<span class="actor">[COURIER]</span> Picks up order at restaurant. Adds GPS checkpoint "Picked up"
+<span class="actor">[COURIER]</span> En-route: adds GPS checkpoints periodically
+<span class="actor">[COURIER]</span> Arrives at address &rarr; taps "Delivered"
+<span class="arrow">           |</span>
+<span class="actor">[USER]</span>    Receives notification: "Your order has arrived!"
+          Taps "Confirm Receipt" in app   <span class="note">(or auto-confirmed after 2 hours)</span>
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  Balance HOLD converted to DEDUCTION &rarr; restaurant receives funds
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: payment.succeeded</span> &rarr; bonus points added
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: delivery.confirmed</span> &rarr; courier rating prompt shown to customer
+<span class="actor">[USER]</span>    Rates courier: 1&ndash;5 stars + comment (optional)</pre>
+    </div>
+  </div>
+
+  <!-- Flow 3 -->
+  <div class="section">
+    <div class="section-title">Flow 3 &mdash; Chef Kitchen Display</div>
+    <div class="flow-box">
+<pre><span class="actor">[CHEF]</span>    Opens KDS on kitchen monitor or phone &rarr; authenticates &rarr; connects to KitchenHub
+          Joins SignalR group: <span class="note">kitchen:{restaurantId}</span>
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  New order arrives (from customer app or waiter):
+<span class="actor">[KDS]</span>     Audio chime plays + new order card slides in
+          Shows: table number, customer name, items + modifiers + notes, allergy flags
+<span class="arrow">           |</span>
+<span class="actor">[CHEF]</span>    Taps item &rarr; marks PREPARING
+          When item is done &rarr; marks READY
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  When ALL items in order = READY:
+<span class="actor">[CHEF]</span>    Taps "Call Waiter" &rarr; selects waiter assigned to that table
+          WaiterHub sends push notification to that waiter: "Order for Table 4 ready"
+<span class="arrow">           |</span>
+<span class="actor">[WAITER]</span>  Receives notification on phone with table number &rarr; picks up food
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  If kitchen printer is configured:
+<span class="actor">[KDS]</span>     On order.placed &rarr; POST to printer webhook endpoint
+          Printer outputs: order ID, table, items, modifiers, special notes, timestamp
+<span class="arrow">           |</span>
+<span class="actor">[CHEF]</span>    Can also mark item UNAVAILABLE (86'd) at any time
+          &rarr; <span class="ev">EVENT: menu.item.unavailable</span> &rarr; Restaurant Service hides from public menu in real-time</pre>
+    </div>
+  </div>
+
+  <!-- Flow 4 -->
+  <div class="section">
+    <div class="section-title">Flow 4 &mdash; Loyalty Bonus System</div>
+    <div class="flow-box">
+<pre><span class="actor">[DIRECTOR]</span> Configures loyalty program:
+           Points rate: 1 point per $1 spent (configurable)
+           Bonus catalogue: Hotdog = 50pts, Burger = 120pts, Soda = 30pts, Mayo = 10pts
+<span class="arrow">           |</span>
+<span class="actor">[USER]</span>    Pays for dine-in or delivery order (any payment method)
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: payment.succeeded</span> &rarr; Payment Service calculates earned points
+          points_earned = floor(total_amount &times; points_rate)
+          Added to user_balances.loyalty_points
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: bonus.earned</span> &rarr; NotifyHub pushes in-app notification
+<span class="arrow">           |</span>
+<span class="actor">[USER]</span>    Next visit &rarr; opens "My Bonuses" screen
+          Sees: current points balance + available rewards
+          Selects: "Redeem 50pts for Free Hotdog"
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  Redemption creates a line item on the next invoice:
+          { name: "Hotdog (Bonus Reward)", quantity: 1, unitPrice: 0.00, originalPrice: 4.50 }
+          loyalty_points deducted by 50
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: bonus.redeemed</span> &rarr; receipt shows item with $0.00 "(Redeemed with points)"</pre>
+    </div>
+  </div>
+
+  <!-- Flow 5 -->
+  <div class="section">
+    <div class="section-title">Flow 5 &mdash; Cashier POS</div>
+    <div class="flow-box">
+<pre><span class="actor">[CASHIER]</span>  Opens dedicated POS app &rarr; authenticates with CASHIER role
+           Sees: live grid of all tables with statuses (EMPTY / OCCUPIED / BILL_REQUESTED)
+<span class="arrow">           |</span>
+<span class="actor">[WAITER]</span>  Customer asks for bill &rarr; waiter taps "Send to Cashier" in their app
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  CashierHub pushes: "Table 7 bill requested &mdash; Total: $87.50"
+<span class="actor">[CASHIER]</span> Sees Table 7 highlighted on their grid
+          Views itemized bill: all orders for that table session
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  Customer pays CASH to waiter &rarr; waiter hands to cashier
+<span class="actor">[CASHIER]</span> Taps "Mark as Paid (Cash)" &rarr; enters amount received &rarr; calculates change
+          Invoice status &rarr; PAID. Table status &rarr; AVAILABLE.
+<span class="arrow">           |</span>
+<span class="arrow">           &darr;</span>  CashierHub pushes to WaiterHub: "Table 7 cleared &mdash; ready for next guest"
+<span class="arrow">           &darr;</span>  <span class="ev">EVENT: payment.cash.recorded</span> &rarr; bonus points calculated for customer
+<span class="arrow">           &darr;</span>  Receipt email sent automatically via SendGrid
+<span class="arrow">           &darr;</span>  Review prompt sent to customer 15 min later</pre>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
