@@ -31,7 +31,7 @@ Open `index.html` directly in a browser. The site is static and does not require
 
 The published site will be available at:
 
-`https://YOUR_ORG.github.io/tablero-docs/`
+`https://tablerohq.github.io/tablero-docs/`
 
 ## Notes
 
