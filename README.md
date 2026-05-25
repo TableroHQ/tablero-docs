@@ -10,13 +10,13 @@ Open `index.html` directly in a browser. The site is static and does not require
 
 ## Pages
 
-- [Overview](index.html)
-- [C4 Architecture](c4.html)
-- [Services](services.html)
-- [Roles & Flows](roles.html)
-- [Database](database.html)
-- [API](api.html)
-- [Events](events.html)
+- [Overview](https://tablerohq.github.io/tablero-docs/index.html)
+- [C4 Architecture](https://tablerohq.github.io/tablero-docs/c4.html)
+- [Services](https://tablerohq.github.io/tablero-docs/services.html)
+- [Roles & Flows](https://tablerohq.github.io/tablero-docs/roles.html)
+- [Database](https://tablerohq.github.io/tablero-docs/database.html)
+- [API](https://tablerohq.github.io/tablero-docs/api.html)
+- [Events](https://tablerohq.github.io/tablero-docs/events.html)
 
 ## Publish With GitHub Pages
 
